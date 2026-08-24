@@ -1,0 +1,19 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Chat del curso</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{% static 'chat/css/chat.css' %}">
+</head>
+<body>
+  <div id="lti-chat-root" data-course-title="{{ course_title }}"></div>
+
+  {{ launch_token|json_script:"lti-chat-token" }}
+  {{ api_base|json_script:"lti-chat-api-base" }}
+  {{ usage|json_script:"lti-chat-usage" }}
+
+  <script src="{% static 'chat/js/chat.js' %}"></script>
+</body>
+</html>

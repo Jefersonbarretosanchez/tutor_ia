@@ -1,0 +1,194 @@
+(function () {
+  "use strict";
+
+  const root = document.getElementById("lti-chat-root");
+  const token = JSON.parse(document.getElementById("lti-chat-token").textContent);
+  const apiBase = JSON.parse(document.getElementById("lti-chat-api-base").textContent);
+  let usage = JSON.parse(document.getElementById("lti-chat-usage").textContent);
+
+  const courseTitle = root.dataset.courseTitle || "este curso";
+
+  async function api(path, options) {
+    const response = await fetch(apiBase + path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+        ...(options && options.headers),
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || "Ocurrió un error inesperado.");
+      error.payload = data;
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+
+  function renderUsageBar(container) {
+    const pct = usage.limit ? Math.min(100, Math.round((usage.tokens_used / usage.limit) * 100)) : 0;
+    const bar = document.createElement("div");
+    bar.className = "lti-chat-usage" + (usage.warning ? " is-warning" : "") + (usage.blocked ? " is-blocked" : "");
+    bar.innerHTML = `
+      <div class="lti-chat-usage-track"><div class="lti-chat-usage-fill" style="width:${pct}%"></div></div>
+      <span class="lti-chat-usage-label">${usage.tokens_used.toLocaleString("es")} / ${usage.limit.toLocaleString("es")} tokens</span>
+    `;
+    container.appendChild(bar);
+  }
+
+  function renderBlockedNotice(container) {
+    const notice = document.createElement("div");
+    notice.className = "lti-chat-notice";
+    notice.textContent = "Alcanzaste el límite de uso del chat para este curso. Contacta a tu docente si necesitas más.";
+    container.appendChild(notice);
+  }
+
+  async function boot() {
+    root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-header"><span>${courseTitle}</span></div><div class="lti-chat-body" id="lti-chat-body"><p class="lti-chat-loading">Cargando plantillas…</p></div></div>`;
+    const body = document.getElementById("lti-chat-body");
+
+    if (usage.blocked) {
+      body.innerHTML = "";
+      renderUsageBar(body);
+      renderBlockedNotice(body);
+      return;
+    }
+
+    let templates;
+    try {
+      templates = await api("templates/", { method: "GET" });
+    } catch (err) {
+      body.innerHTML = `<p class="lti-chat-error">No se pudieron cargar las plantillas: ${err.message}</p>`;
+      return;
+    }
+
+    body.innerHTML = "";
+    renderUsageBar(body);
+
+    const picker = document.createElement("div");
+    picker.className = "lti-chat-template-picker";
+    picker.innerHTML = "<p>¿Con qué te ayudo hoy?</p>";
+    templates.forEach((tpl) => {
+      const btn = document.createElement("button");
+      btn.className = "lti-chat-template-btn";
+      btn.textContent = tpl.title;
+      btn.title = tpl.description || "";
+      btn.addEventListener("click", () => startSession(tpl));
+      picker.appendChild(btn);
+    });
+    body.appendChild(picker);
+  }
+
+  async function startSession(template) {
+    const body = document.getElementById("lti-chat-body");
+    body.innerHTML = '<p class="lti-chat-loading">Preparando el chat…</p>';
+
+    let data;
+    try {
+      data = await api("sessions/", {
+        method: "POST",
+        body: JSON.stringify({ template_id: template.id }),
+      });
+    } catch (err) {
+      body.innerHTML = `<p class="lti-chat-error">${err.message}</p>`;
+      return;
+    }
+
+    usage = data.usage;
+    renderChatUI(data.session.id);
+  }
+
+  function renderChatUI(sessionId) {
+    const body = document.getElementById("lti-chat-body");
+    body.innerHTML = "";
+    renderUsageBar(body);
+
+    const log = document.createElement("div");
+    log.className = "lti-chat-log";
+    body.appendChild(log);
+
+    const form = document.createElement("form");
+    form.className = "lti-chat-form";
+    form.innerHTML = `
+      <textarea class="lti-chat-input" placeholder="Escribe tu pregunta…" rows="2"></textarea>
+      <button type="submit" class="lti-chat-send">Enviar</button>
+    `;
+    body.appendChild(form);
+
+    const textarea = form.querySelector("textarea");
+    const sendBtn = form.querySelector("button");
+
+    function appendBubble(role, text) {
+      const bubble = document.createElement("div");
+      bubble.className = "lti-chat-bubble lti-chat-bubble--" + role;
+      bubble.textContent = text;
+      log.appendChild(bubble);
+      log.scrollTop = log.scrollHeight;
+      return bubble;
+    }
+
+    function lockInput(locked) {
+      textarea.disabled = locked;
+      sendBtn.disabled = locked;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const text = textarea.value.trim();
+      if (!text) return;
+
+      appendBubble("user", text);
+      textarea.value = "";
+      lockInput(true);
+      const thinking = appendBubble("assistant", "Escribiendo…");
+      thinking.classList.add("is-thinking");
+
+      try {
+        const data = await api(`sessions/${sessionId}/messages/`, {
+          method: "POST",
+          body: JSON.stringify({ message: text }),
+        });
+        thinking.remove();
+        appendBubble("assistant", data.message.content);
+        usage = data.usage;
+        refreshUsageBar(body);
+        if (usage.blocked) {
+          lockInput(true);
+          renderBlockedNotice(body);
+        } else {
+          lockInput(false);
+          textarea.focus();
+        }
+      } catch (err) {
+        thinking.remove();
+        if (err.status === 403 && err.payload && err.payload.usage) {
+          usage = err.payload.usage;
+          refreshUsageBar(body);
+          renderBlockedNotice(body);
+          lockInput(true);
+        } else {
+          appendBubble("assistant", "No pude responder: " + err.message);
+          lockInput(false);
+        }
+      }
+    });
+
+    textarea.focus();
+  }
+
+  function refreshUsageBar(container) {
+    const old = container.querySelector(".lti-chat-usage");
+    const wrapper = document.createElement("div");
+    renderUsageBar(wrapper);
+    const fresh = wrapper.firstChild;
+    if (old) {
+      old.replaceWith(fresh);
+    } else {
+      container.insertBefore(fresh, container.firstChild);
+    }
+  }
+
+  boot();
+})();
