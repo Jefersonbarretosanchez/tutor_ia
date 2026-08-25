@@ -86,5 +86,9 @@ def call_flow(flow, *, user_id: str, course_id: str, momento_tipo: str, message:
         },
         "execution_id": data.get("execution_id", ""),
         "latency_ms": latency_ms,
+        # El agente decide cuándo el estudiante cumplió el objetivo de la
+        # conversación (ver documento de alcance de nota al gradebook) —
+        # por ahora, cualquier valor truthy en "completed" dispara el AGS.
+        "completed": bool(data.get("completed", False)),
     }
     return normalized

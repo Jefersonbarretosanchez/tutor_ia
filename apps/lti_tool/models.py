@@ -37,6 +37,21 @@ class Course(models.Model):
         help_text="Opcional: 'custom_canvas_course_id' si el Developer Key lo expone.",
     )
     title = models.CharField(max_length=255, blank=True)
+    ags_lineitems_url = models.CharField(
+        max_length=1024,
+        blank=True,
+        help_text="Claim AGS 'endpoint.lineitems' — URL para crear/listar line items del curso.",
+    )
+    ags_lineitem_url = models.CharField(
+        max_length=1024,
+        blank=True,
+        help_text="Line item ya creado/reusado para la actividad del Tutor IA en este curso.",
+    )
+    ags_scope = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Scopes AGS otorgados por Canvas (claim 'endpoint.scope').",
+    )
     token_limit = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -78,13 +93,27 @@ class Student(models.Model):
         blank=True,
         help_text="Opcional: 'custom_canvas_user_id' si el Developer Key lo expone.",
     )
+    login_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Usuario institucional ('custom_canvas_user_login_id') si el Developer Key lo expone.",
+    )
+    name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Claim estándar 'name' — requiere Privacy Level 'Public' en el Developer Key.",
+    )
+    email = models.EmailField(
+        blank=True,
+        help_text="Claim estándar 'email' — requiere Privacy Level 'Public' (o 'Email only') en el Developer Key.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = [("lti_tool", "deployment_id", "sub")]
 
     def __str__(self):
-        return self.canvas_user_id or self.sub
+        return self.name or self.canvas_user_id or self.sub
 
 
 class CourseEnrollment(models.Model):
@@ -96,8 +125,18 @@ class CourseEnrollment(models.Model):
         default=False,
         help_text="Si el rol LTI incluye Instructor — pensado para eximir del límite de tokens.",
     )
+    section_ids = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="'custom_canvas_course_section_ids' si el Developer Key lo expone (separados por coma).",
+    )
     chat_enabled = models.BooleanField(default=True)
     limit_reached_at = models.DateTimeField(null=True, blank=True)
+    graded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Cuándo se envió la nota de completitud a Canvas (AGS). Vacío = todavía no.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

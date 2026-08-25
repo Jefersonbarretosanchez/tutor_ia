@@ -15,7 +15,7 @@ from apps.chat.serializers import (
     PromptTemplateSerializer,
     SessionStartSerializer,
 )
-from apps.chat.services import token_ledger
+from apps.chat.services import grades, token_ledger
 from apps.chat.services.n8n_client import call_flow
 
 logger = logging.getLogger(__name__)
@@ -120,6 +120,9 @@ class MessageCreateView(APIView):
         if status_info.blocked:
             session.status = ChatSession.STATUS_LIMITED
             session.save(update_fields=["status"])
+
+        if result.get("completed") and not enrollment.graded_at:
+            grades.mark_activity_completed(enrollment)
 
         return Response(
             {

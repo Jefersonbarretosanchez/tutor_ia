@@ -11,6 +11,7 @@ from apps.chat.auth import encode_launch_token
 from apps.chat.services import token_ledger
 from apps.lti_tool.lti_config import (
     extract_course_fields,
+    extract_enrollment_fields,
     extract_student_fields,
     get_launch_data_storage,
     get_tool_conf,
@@ -90,27 +91,37 @@ def launch(request):
 
     lti_tool_row = LtiTool.objects.get(issuer=launch_data.get("iss"), client_id=launch_data.get("aud"))
 
-    course, _ = Course.objects.get_or_create(
+    course, _ = Course.objects.update_or_create(
         lti_tool=lti_tool_row,
         deployment_id=course_fields["deployment_id"],
         context_id=course_fields["context_id"],
         defaults={
             "title": course_fields["title"],
             "canvas_course_id": course_fields["canvas_course_id"],
+            "ags_lineitems_url": course_fields["ags_lineitems_url"],
+            "ags_scope": course_fields["ags_scope"],
         },
     )
 
-    student, _ = Student.objects.get_or_create(
+    student, _ = Student.objects.update_or_create(
         lti_tool=lti_tool_row,
         deployment_id=student_fields["deployment_id"],
         sub=student_fields["sub"],
-        defaults={"canvas_user_id": student_fields["canvas_user_id"]},
+        defaults={
+            "canvas_user_id": student_fields["canvas_user_id"],
+            "login_id": student_fields["login_id"],
+            "name": student_fields["name"],
+            "email": student_fields["email"],
+        },
     )
 
-    enrollment, _ = CourseEnrollment.objects.get_or_create(
+    enrollment, _ = CourseEnrollment.objects.update_or_create(
         student=student,
         course=course,
-        defaults={"is_instructor": is_instructor(launch_data)},
+        defaults={
+            "is_instructor": is_instructor(launch_data),
+            **extract_enrollment_fields(launch_data),
+        },
     )
 
     LtiLaunchLog.objects.create(
