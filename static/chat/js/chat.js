@@ -6,7 +6,20 @@
   const apiBase = JSON.parse(document.getElementById("lti-chat-api-base").textContent);
   let usage = JSON.parse(document.getElementById("lti-chat-usage").textContent);
 
-  const courseTitle = root.dataset.courseTitle || "este curso";
+  const SEND_ICON = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 11.5L20.5 3.5L13 21L10.5 13.5L3 11.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="currentColor" fill-opacity="0.15"/></svg>`;
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function formatAssistantText(str) {
+    return escapeHtml(str)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n/g, "<br>");
+  }
 
   async function api(path, options) {
     const response = await fetch(apiBase + path, {
@@ -46,7 +59,7 @@
   }
 
   async function boot() {
-    root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-header"><span>${courseTitle}</span></div><div class="lti-chat-body" id="lti-chat-body"><p class="lti-chat-loading">Cargando plantillas…</p></div></div>`;
+    root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-body" id="lti-chat-body"><p class="lti-chat-loading">Cargando plantillas…</p></div></div>`;
     const body = document.getElementById("lti-chat-body");
 
     if (usage.blocked) {
@@ -112,8 +125,10 @@
     const form = document.createElement("form");
     form.className = "lti-chat-form";
     form.innerHTML = `
-      <textarea class="lti-chat-input" placeholder="Escribe tu pregunta…" rows="2"></textarea>
-      <button type="submit" class="lti-chat-send">Enviar</button>
+      <div class="lti-chat-input-wrap">
+        <textarea class="lti-chat-input" placeholder="Escribe tu respuesta al tutor IA…" rows="1"></textarea>
+        <button type="submit" class="lti-chat-send" aria-label="Enviar">${SEND_ICON}</button>
+      </div>
     `;
     body.appendChild(form);
 
@@ -123,7 +138,11 @@
     function appendBubble(role, text) {
       const bubble = document.createElement("div");
       bubble.className = "lti-chat-bubble lti-chat-bubble--" + role;
-      bubble.textContent = text;
+      if (role === "assistant") {
+        bubble.innerHTML = formatAssistantText(text);
+      } else {
+        bubble.textContent = text;
+      }
       log.appendChild(bubble);
       log.scrollTop = log.scrollHeight;
       return bubble;
@@ -133,6 +152,13 @@
       textarea.disabled = locked;
       sendBtn.disabled = locked;
     }
+
+    textarea.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        form.requestSubmit();
+      }
+    });
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
