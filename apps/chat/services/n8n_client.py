@@ -62,6 +62,9 @@ def call_flow(flow, *, user_id: str, course_id: str, momento_tipo: str, message:
     try:
         data = response.json()
     except ValueError as exc:
+        logger.error(
+            "n8n: %s devolvió %s no-JSON: %s", flow.code, response.status_code, response.text[:500]
+        )
         raise N8nError(f"El agente ({flow.code}) devolvió una respuesta que no es JSON válido.") from exc
 
     reply = data.get("reply")
