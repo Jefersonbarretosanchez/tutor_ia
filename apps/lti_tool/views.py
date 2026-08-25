@@ -28,6 +28,7 @@ def _client_ip(request):
     return request.META.get("REMOTE_ADDR")
 
 
+@csrf_exempt
 def login(request):
     """Paso 1 del OIDC third-party initiated login: Canvas redirige aquí antes del launch."""
     tool_conf = get_tool_conf()
