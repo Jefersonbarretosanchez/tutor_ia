@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Script de despliegue — se ejecuta EN LA VPS, dentro de /srv/lti-chat.
+# Script de despliegue — se ejecuta EN LA VPS, dentro de /var/www/tutor_ia.
 # Uso: ./deploy/deploy.sh
 set -euo pipefail
 
-APP_DIR="/srv/lti-chat"
+APP_DIR="/var/www/tutor_ia"
 cd "$APP_DIR"
 
 echo "==> git pull"
@@ -22,7 +22,7 @@ echo "==> estáticos"
 python manage.py collectstatic --noinput
 
 echo "==> reiniciando servicio"
-sudo systemctl restart lti-chat
+sudo systemctl restart tutor_ia
 
 echo "==> listo"
-sudo systemctl status lti-chat --no-pager -l | head -n 10
+sudo systemctl status tutor_ia --no-pager -l | head -n 10

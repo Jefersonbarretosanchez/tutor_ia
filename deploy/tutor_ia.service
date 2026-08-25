@@ -1,0 +1,20 @@
+[Unit]
+Description=Gunicorn - Tutor IA (LTI Chat)
+After=network.target postgresql.service redis-server.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/tutor_ia
+EnvironmentFile=/var/www/tutor_ia/.env
+ExecStart=/var/www/tutor_ia/venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/var/www/tutor_ia/run/gunicorn.sock \
+    --access-logfile - \
+    --error-logfile - \
+    config.wsgi:application
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
