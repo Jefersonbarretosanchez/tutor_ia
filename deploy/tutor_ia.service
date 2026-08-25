@@ -3,13 +3,13 @@ Description=Gunicorn - Tutor IA (LTI Chat)
 After=network.target postgresql.service redis-server.service
 
 [Service]
-User=www-data
-Group=www-data
+User=jefers97
+Group=jefers97
 WorkingDirectory=/var/www/tutor_ia
 EnvironmentFile=/var/www/tutor_ia/.env
 ExecStart=/var/www/tutor_ia/venv/bin/gunicorn \
     --workers 3 \
-    --bind unix:/var/www/tutor_ia/run/gunicorn.sock \
+    --bind 127.0.0.1:8001 \
     --access-logfile - \
     --error-logfile - \
     config.wsgi:application
