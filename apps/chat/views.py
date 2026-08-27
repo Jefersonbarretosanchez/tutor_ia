@@ -234,15 +234,18 @@ class ClaraReplyView(APIView):
         moment.mensajes_usados = result["mensajes_usados"]
         if result["limite"]:
             moment.limite = result["limite"]
-        # "limite_alcanzado" no trae porcentaje_usado/tokens_usados/presupuesto
-        # (ver apps/chat/services/clara_client.py) — se conserva lo último
-        # conocido en vez de pisarlo con None.
-        if result["tokens_usados"] is not None:
-            moment.tokens_used = result["tokens_usados"]
-        if result["presupuesto"] is not None:
-            moment.presupuesto = result["presupuesto"]
-        if result["porcentaje_usado"] is not None:
-            moment.porcentaje_usado = result["porcentaje_usado"]
+        if result["tipo"] == "limite_alcanzado":
+            # "limite_alcanzado" no trae porcentaje_usado/tokens_usados —
+            # se fuerza a 100% (ya no queda presupuesto) en vez de conservar
+            # el último valor conocido (que podía quedarse, p. ej., en 92%).
+            moment.porcentaje_usado = 100
+        else:
+            if result["tokens_usados"] is not None:
+                moment.tokens_used = result["tokens_usados"]
+            if result["presupuesto"] is not None:
+                moment.presupuesto = result["presupuesto"]
+            if result["porcentaje_usado"] is not None:
+                moment.porcentaje_usado = result["porcentaje_usado"]
         moment.puede_avanzar = result["puede_avanzar"]
         moment.save(
             update_fields=[
