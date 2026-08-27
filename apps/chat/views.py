@@ -201,36 +201,38 @@ class ClaraReplyView(APIView):
 
         message_limit, token_limit, closing_message = ClaraMomentLimit.effective_for(enrollment.course, momento)
 
-        # Corte por unidad (mensajes o tokens) — ANTES de llamar a n8n, para
-        # no gastar una ejecución del agente ni tokens de más. El mensaje
-        # que hace llegar el contador al límite sí pasa (se evalúa contra el
-        # conteo ANTERIOR a este turno); solo los intentos siguientes caen
-        # aquí, porque ya no queda cupo.
-        moment_exhausted = moment.mensajes_usados >= message_limit or (
-            token_limit is not None and moment.tokens_used >= token_limit
-        )
-        if moment_exhausted:
-            ClaraMessage.objects.create(moment=moment, role=ClaraMessage.ROLE_USER, content=text)
-            assistant_message = ClaraMessage.objects.create(
-                moment=moment, role=ClaraMessage.ROLE_ASSISTANT, content=closing_message, tokens_used=0
-            )
+        def block_moment(code):
+            """
+            Corta ANTES de llamar a n8n, sin fabricar un mensaje de chat: el
+            cierre de la conversación lo da el propio flujo de n8n (su
+            'Responder Limite'), nunca la LTI. Esto solo se usa para el tope
+            de TOKENS (que n8n no conoce) o para un `message_limit` menor al
+            tope real de n8n (8) — ver nota en ClaraMomentLimit.
+            """
             moment.puede_avanzar = True
             moment.save(update_fields=["puede_avanzar", "last_activity_at"])
-
             if not enrollment.graded_at:
                 grades.mark_activity_completed(enrollment)
-
             return Response(
                 {
-                    "message": ClaraMessageSerializer(assistant_message).data,
-                    "tipo": "limite_alcanzado",
-                    "puede_avanzar": True,
+                    "error": closing_message,
+                    "code": code,
                     "mensajes_usados": moment.mensajes_usados,
                     "limite": message_limit,
                     "usage": token_ledger.get_usage_status(enrollment).as_dict(),
                 },
-                status=201,
+                status=403,
             )
+
+        if token_limit is not None and moment.tokens_used >= token_limit:
+            return block_moment("moment_token_limit_reached")
+
+        # El mensaje que hace llegar el contador al límite SÍ se manda a
+        # n8n (por eso el +1): su propio flujo interno tiene el mismo tope
+        # (8) y es el que responde el cierre de forma natural. Solo los
+        # intentos posteriores a ese se cortan aquí.
+        if moment.mensajes_usados >= message_limit + 1:
+            return block_moment("moment_message_limit_reached")
 
         if not token_ledger.has_capacity(enrollment):
             status_info = token_ledger.get_usage_status(enrollment)

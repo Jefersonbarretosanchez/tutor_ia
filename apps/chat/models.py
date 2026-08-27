@@ -182,15 +182,21 @@ class ClaraMoment(models.Model):
 class ClaraMomentLimit(models.Model):
     """
     Límites configurables desde /admin/ para un momento dentro de un curso —
-    cuántos mensajes y cuántos tokens puede consumir el estudiante ahí antes
-    de que Django corte la conversación (sin llamar a n8n) y le muestre el
-    mensaje de cierre.
+    cuántos mensajes y cuántos tokens puede consumir el estudiante ahí.
 
-    El webhook de n8n (`/clara/responder`) tiene su propio tope fijo de 8
-    mensajes en su lógica interna — un `message_limit` MENOR a 8 aquí sí
-    corta antes; uno MAYOR no tiene efecto porque n8n corta primero. El
-    mensaje que hace llegar el contador al límite sí se manda a n8n y
-    obtiene una respuesta real; los intentos siguientes ya no se envían.
+    El mensaje de CIERRE de la conversación lo da siempre el propio flujo de
+    n8n (su rama 'Responder Limite'), nunca Django/la LTI: el mensaje del
+    estudiante que hace llegar el contador al `message_limit` SÍ se manda a
+    n8n para que responda el cierre de forma natural (su lógica interna
+    también tiene un tope fijo de 8) — Django solo corta ANTES de llamar a
+    n8n para los intentos que van MÁS ALLÁ de ese mensaje, o para el tope de
+    TOKENS (que n8n no conoce). En esos dos casos sí se usa `closing_message`,
+    pero como un aviso del sistema, nunca como si lo dijera Clara.
+
+    Nota: como el tope real de n8n es 8, un `message_limit` MENOR a 8 aquí
+    corta antes de que n8n llegue a responder algo (Django lo bloquea sin
+    que n8n intervenga); uno MAYOR o IGUAL a 8 no tiene efecto propio, ya
+    que n8n siempre corta primero y es quien cierra la conversación.
     """
 
     DEFAULT_MESSAGE_LIMIT = 8
@@ -204,7 +210,11 @@ class ClaraMomentLimit(models.Model):
     momento = models.CharField(max_length=20, choices=ClaraMoment.MOMENTO_CHOICES)
     message_limit = models.PositiveIntegerField(
         default=8,
-        help_text="Máximo de mensajes del estudiante en este momento. El tope real de n8n es 8 — ver nota arriba.",
+        help_text=(
+            "Máximo de mensajes del estudiante en este momento. El mensaje que llega a este número "
+            "SÍ se manda a n8n (para que él dé el cierre); los intentos posteriores ya no se envían. "
+            "El tope real del flujo de n8n es 8 — un valor mayor o igual no tiene efecto propio."
+        ),
     )
     token_limit = models.PositiveIntegerField(
         null=True,
@@ -214,7 +224,11 @@ class ClaraMomentLimit(models.Model):
     closing_message = models.CharField(
         max_length=500,
         blank=True,
-        help_text="Mensaje que ve el estudiante al alcanzar el límite. Vacío = usa el mensaje por defecto.",
+        help_text=(
+            "Aviso del sistema que ve el estudiante si Django corta la conversación "
+            "(tope de tokens, o intento posterior al límite de mensajes) — no es una respuesta de Clara. "
+            "Vacío = usa el mensaje por defecto."
+        ),
     )
 
     class Meta:

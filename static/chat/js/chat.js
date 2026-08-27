@@ -227,7 +227,7 @@
         if (err.status === 403 && err.payload && err.payload.usage) {
           usage = err.payload.usage;
           refreshUsageBar(body);
-          renderBlockedNotice(body);
+          renderBlockedNotice(body, err.message);
           lockInput(true);
         } else {
           appendErrorBubble(err.message || "Tuvimos una falla respondiendo. Intenta de nuevo.", () =>
