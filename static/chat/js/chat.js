@@ -60,6 +60,14 @@
     container.appendChild(notice);
   }
 
+  function renderCompletedNotice(container, beforeEl) {
+    if (container.querySelector(".lti-chat-notice.is-success")) return;
+    const notice = document.createElement("div");
+    notice.className = "lti-chat-notice is-success";
+    notice.textContent = "Completaste esta actividad. Puedes continuar en Canvas.";
+    container.insertBefore(notice, beforeEl);
+  }
+
   async function boot() {
     root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-body" id="lti-chat-body"><p class="lti-chat-loading">Cargando…</p></div></div>`;
     const body = document.getElementById("lti-chat-body");
@@ -86,6 +94,14 @@
     const body = document.getElementById("lti-chat-body");
     body.innerHTML = "";
     renderUsageBar(body);
+
+    const progress = document.createElement("div");
+    progress.className = "lti-chat-progress";
+    body.appendChild(progress);
+
+    if (moment.puede_avanzar) {
+      renderCompletedNotice(body, progress);
+    }
 
     const log = document.createElement("div");
     log.className = "lti-chat-log";
@@ -117,16 +133,61 @@
       return bubble;
     }
 
+    function appendTypingBubble() {
+      const bubble = document.createElement("div");
+      bubble.className = "lti-chat-bubble lti-chat-bubble--assistant";
+      bubble.innerHTML = '<span class="lti-chat-typing"><span></span><span></span><span></span></span>';
+      log.appendChild(bubble);
+      log.scrollTop = log.scrollHeight;
+      return bubble;
+    }
+
+    function appendErrorBubble(message, onRetry) {
+      const bubble = document.createElement("div");
+      bubble.className = "lti-chat-bubble lti-chat-bubble--assistant lti-chat-bubble--error";
+
+      const p = document.createElement("p");
+      p.textContent = message;
+      bubble.appendChild(p);
+
+      const retryBtn = document.createElement("button");
+      retryBtn.type = "button";
+      retryBtn.className = "lti-chat-retry";
+      retryBtn.textContent = "Reintentar";
+      retryBtn.addEventListener("click", () => {
+        bubble.remove();
+        onRetry();
+      });
+      bubble.appendChild(retryBtn);
+
+      log.appendChild(bubble);
+      log.scrollTop = log.scrollHeight;
+      return bubble;
+    }
+
     function lockInput(locked) {
       textarea.disabled = locked;
       sendBtn.disabled = locked;
     }
 
+    function updateProgress(usados, limite) {
+      progress.textContent = `${usados} / ${limite} mensajes en esta unidad`;
+      progress.classList.toggle("is-near-limit", limite - usados <= 2);
+    }
+
+    function autoResizeTextarea() {
+      textarea.style.height = "auto";
+      textarea.style.height = textarea.scrollHeight + "px";
+    }
+
     moment.messages.forEach((msg) => appendBubble(msg.role, msg.content));
+    updateProgress(moment.mensajes_usados, moment.limite);
 
     if (moment.mensajes_usados >= moment.limite) {
       lockInput(true);
     }
+
+    textarea.addEventListener("input", autoResizeTextarea);
 
     textarea.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -135,16 +196,9 @@
       }
     });
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const text = textarea.value.trim();
-      if (!text) return;
-
-      appendBubble("user", text);
-      textarea.value = "";
+    async function submitToClara(text) {
       lockInput(true);
-      const thinking = appendBubble("assistant", "Escribiendo…");
-      thinking.classList.add("is-thinking");
+      const thinking = appendTypingBubble();
 
       try {
         const data = await api("clara/reply/", {
@@ -155,6 +209,10 @@
         appendBubble("assistant", data.message.content);
         usage = data.usage;
         refreshUsageBar(body);
+        updateProgress(data.mensajes_usados, data.limite);
+        if (data.puede_avanzar) {
+          renderCompletedNotice(body, progress);
+        }
         if (usage.blocked) {
           lockInput(true);
           renderBlockedNotice(body);
@@ -172,10 +230,24 @@
           renderBlockedNotice(body);
           lockInput(true);
         } else {
-          appendBubble("assistant", "No pude responder: " + err.message);
+          appendErrorBubble(err.message || "Tuvimos una falla respondiendo. Intenta de nuevo.", () =>
+            submitToClara(text)
+          );
           lockInput(false);
+          textarea.focus();
         }
       }
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const text = textarea.value.trim();
+      if (!text) return;
+
+      appendBubble("user", text);
+      textarea.value = "";
+      autoResizeTextarea();
+      submitToClara(text);
     });
 
     textarea.focus();

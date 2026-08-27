@@ -11,6 +11,8 @@
   --lti-warn-soft: #f7ead6;
   --lti-danger-soft: #fbe4e2;
   --lti-danger-ink: #9c2c22;
+  --lti-success: #2f7a4d;
+  --lti-success-soft: #e3f3e8;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +29,8 @@
     --lti-warn-soft: rgba(227, 163, 85, 0.14);
     --lti-danger-soft: rgba(220, 90, 74, 0.14);
     --lti-danger-ink: #ff8a7a;
+    --lti-success: #6fd393;
+    --lti-success-soft: rgba(111, 211, 147, 0.14);
   }
 }
 
@@ -94,6 +98,17 @@ body {
   padding: .6rem .8rem;
   font-size: .84rem;
 }
+.lti-chat-notice.is-success {
+  background: var(--lti-success-soft);
+  color: var(--lti-success);
+}
+
+/* Progreso de mensajes dentro de la unidad */
+.lti-chat-progress {
+  font-size: .74rem;
+  color: var(--lti-ink-soft);
+}
+.lti-chat-progress.is-near-limit { color: var(--lti-warn); }
 
 /* Log de mensajes */
 .lti-chat-log {
@@ -128,7 +143,44 @@ body {
   box-shadow: 0 1px 3px rgba(20, 10, 50, 0.06);
 }
 .lti-chat-bubble--assistant strong { font-weight: 700; }
-.lti-chat-bubble.is-thinking { opacity: .65; font-style: italic; }
+
+/* Puntos animados mientras el agente "escribe" */
+.lti-chat-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  padding: .15rem 0;
+}
+.lti-chat-typing span {
+  width: .38rem;
+  height: .38rem;
+  border-radius: 50%;
+  background: var(--lti-ink-soft);
+  animation: lti-chat-typing-bounce 1.1s infinite ease-in-out;
+}
+.lti-chat-typing span:nth-child(2) { animation-delay: .15s; }
+.lti-chat-typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes lti-chat-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .5; }
+  30% { transform: translateY(-.2rem); opacity: 1; }
+}
+
+/* Burbuja de error con opción de reintentar */
+.lti-chat-bubble--error {
+  background: var(--lti-danger-soft);
+  border-color: transparent;
+}
+.lti-chat-bubble--error p { margin: 0 0 .5rem; }
+.lti-chat-retry {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: var(--lti-danger-ink);
+  border-radius: 999px;
+  padding: .3rem .8rem;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.lti-chat-retry:hover { background: var(--lti-danger-soft); }
 
 /* Formulario de envío */
 .lti-chat-form {
