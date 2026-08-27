@@ -1,6 +1,14 @@
 from django.contrib import admin
 
+from apps.chat.models import ClaraMomentLimit
+
 from .models import Course, CourseEnrollment, LtiLaunchLog, Student
+
+
+class ClaraMomentLimitInline(admin.TabularInline):
+    model = ClaraMomentLimit
+    extra = 0
+    max_num = len(ClaraMomentLimit._meta.get_field("momento").choices)
 
 
 @admin.register(Course)
@@ -8,6 +16,7 @@ class CourseAdmin(admin.ModelAdmin):
     list_display = ("title", "context_id", "lti_tool", "token_limit", "is_active", "ags_enabled")
     list_filter = ("is_active", "lti_tool")
     search_fields = ("title", "context_id", "canvas_course_id")
+    inlines = [ClaraMomentLimitInline]
 
     @admin.display(boolean=True, description="AGS")
     def ags_enabled(self, obj):

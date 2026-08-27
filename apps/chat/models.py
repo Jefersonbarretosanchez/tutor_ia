@@ -159,7 +159,14 @@ class ClaraMoment(models.Model):
         help_text="Id de la pregunta detonadora en Supabase (campo 'pregunta_id' de /clara/apertura).",
     )
     mensajes_usados = models.PositiveIntegerField(default=0)
-    limite = models.PositiveIntegerField(default=8)
+    limite = models.PositiveIntegerField(
+        default=8,
+        help_text="Tope de mensajes vigente para este momento (copiado de ClaraMomentLimit al momento de cada turno).",
+    )
+    tokens_used = models.PositiveIntegerField(
+        default=0,
+        help_text="Suma de tokens consumidos en este momento (independiente del ledger de tokens del curso).",
+    )
     puede_avanzar = models.BooleanField(default=False)
     started_at = models.DateTimeField(auto_now_add=True)
     last_activity_at = models.DateTimeField(auto_now=True)
@@ -170,6 +177,70 @@ class ClaraMoment(models.Model):
 
     def __str__(self):
         return f"{self.enrollment} · {self.momento}"
+
+
+class ClaraMomentLimit(models.Model):
+    """
+    Límites configurables desde /admin/ para un momento dentro de un curso —
+    cuántos mensajes y cuántos tokens puede consumir el estudiante ahí antes
+    de que Django corte la conversación (sin llamar a n8n) y le muestre el
+    mensaje de cierre.
+
+    El webhook de n8n (`/clara/responder`) tiene su propio tope fijo de 8
+    mensajes en su lógica interna — un `message_limit` MENOR a 8 aquí sí
+    corta antes; uno MAYOR no tiene efecto porque n8n corta primero. El
+    mensaje que hace llegar el contador al límite sí se manda a n8n y
+    obtiene una respuesta real; los intentos siguientes ya no se envían.
+    """
+
+    DEFAULT_MESSAGE_LIMIT = 8
+    DEFAULT_CLOSING_MESSAGE = "Llegaste al límite de esta actividad. Ya puedes continuar en Canvas."
+
+    course = models.ForeignKey(
+        "lti_tool.Course",
+        on_delete=models.CASCADE,
+        related_name="clara_moment_limits",
+    )
+    momento = models.CharField(max_length=20, choices=ClaraMoment.MOMENTO_CHOICES)
+    message_limit = models.PositiveIntegerField(
+        default=8,
+        help_text="Máximo de mensajes del estudiante en este momento. El tope real de n8n es 8 — ver nota arriba.",
+    )
+    token_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Máximo de tokens consumidos en este momento. Vacío = sin tope propio (solo aplica el límite de tokens del curso).",
+    )
+    closing_message = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Mensaje que ve el estudiante al alcanzar el límite. Vacío = usa el mensaje por defecto.",
+    )
+
+    class Meta:
+        unique_together = [("course", "momento")]
+        verbose_name = "Límite de Clara por unidad"
+        verbose_name_plural = "Límites de Clara por unidad"
+
+    def __str__(self):
+        return f"{self.course} · {self.momento}"
+
+    @classmethod
+    def effective_for(cls, course, momento):
+        """
+        Devuelve el (message_limit, token_limit, closing_message) vigente
+        para ese curso+momento — los valores por defecto si nadie lo
+        configuró en /admin/.
+        """
+        try:
+            config = cls.objects.get(course=course, momento=momento)
+        except cls.DoesNotExist:
+            return cls.DEFAULT_MESSAGE_LIMIT, None, cls.DEFAULT_CLOSING_MESSAGE
+        return (
+            config.message_limit,
+            config.token_limit,
+            config.closing_message or cls.DEFAULT_CLOSING_MESSAGE,
+        )
 
 
 class ClaraMessage(models.Model):

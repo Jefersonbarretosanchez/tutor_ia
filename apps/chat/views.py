@@ -7,7 +7,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.chat.models import ChatMessage, ChatSession, ClaraMessage, ClaraMoment, PromptTemplate
+from apps.chat.models import ChatMessage, ChatSession, ClaraMessage, ClaraMoment, ClaraMomentLimit, PromptTemplate
 from apps.chat.serializers import (
     ChatMessageSerializer,
     ChatSessionSerializer,
@@ -169,11 +169,14 @@ class ClaraMomentView(APIView):
                 moment.delete()
                 raise
 
+            message_limit, _token_limit, _closing_message = ClaraMomentLimit.effective_for(
+                enrollment.course, momento
+            )
             moment.pregunta_id = result["pregunta_id"]
             moment.mensajes_usados = result["mensajes_usados"]
-            if result["limite"]:
-                moment.limite = result["limite"]
-            moment.save(update_fields=["pregunta_id", "mensajes_usados", "limite"])
+            moment.limite = message_limit
+            moment.tokens_used = result["tokens_used"]
+            moment.save(update_fields=["pregunta_id", "mensajes_usados", "limite", "tokens_used"])
             ClaraMessage.objects.create(
                 moment=moment,
                 role=ClaraMessage.ROLE_ASSISTANT,
@@ -195,6 +198,39 @@ class ClaraReplyView(APIView):
 
         enrollment = request.user.enrollment
         moment = get_object_or_404(ClaraMoment, enrollment=enrollment, momento=momento)
+
+        message_limit, token_limit, closing_message = ClaraMomentLimit.effective_for(enrollment.course, momento)
+
+        # Corte por unidad (mensajes o tokens) — ANTES de llamar a n8n, para
+        # no gastar una ejecución del agente ni tokens de más. El mensaje
+        # que hace llegar el contador al límite sí pasa (se evalúa contra el
+        # conteo ANTERIOR a este turno); solo los intentos siguientes caen
+        # aquí, porque ya no queda cupo.
+        moment_exhausted = moment.mensajes_usados >= message_limit or (
+            token_limit is not None and moment.tokens_used >= token_limit
+        )
+        if moment_exhausted:
+            ClaraMessage.objects.create(moment=moment, role=ClaraMessage.ROLE_USER, content=text)
+            assistant_message = ClaraMessage.objects.create(
+                moment=moment, role=ClaraMessage.ROLE_ASSISTANT, content=closing_message, tokens_used=0
+            )
+            moment.puede_avanzar = True
+            moment.save(update_fields=["puede_avanzar", "last_activity_at"])
+
+            if not enrollment.graded_at:
+                grades.mark_activity_completed(enrollment)
+
+            return Response(
+                {
+                    "message": ClaraMessageSerializer(assistant_message).data,
+                    "tipo": "limite_alcanzado",
+                    "puede_avanzar": True,
+                    "mensajes_usados": moment.mensajes_usados,
+                    "limite": message_limit,
+                    "usage": token_ledger.get_usage_status(enrollment).as_dict(),
+                },
+                status=201,
+            )
 
         if not token_ledger.has_capacity(enrollment):
             status_info = token_ledger.get_usage_status(enrollment)
@@ -228,10 +264,10 @@ class ClaraReplyView(APIView):
         )
 
         moment.mensajes_usados = result["mensajes_usados"]
-        if result["limite"]:
-            moment.limite = result["limite"]
+        moment.limite = message_limit
+        moment.tokens_used += result["tokens_used"]
         moment.puede_avanzar = result["puede_avanzar"]
-        moment.save(update_fields=["mensajes_usados", "limite", "puede_avanzar", "last_activity_at"])
+        moment.save(update_fields=["mensajes_usados", "limite", "tokens_used", "puede_avanzar", "last_activity_at"])
 
         status_info = token_ledger.register_usage(enrollment, None, result["tokens_used"])
 

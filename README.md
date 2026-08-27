@@ -103,9 +103,10 @@ Copiar `.env.example` a `.env` y completar. Lo importante:
 
 Desde ahí se gestiona todo lo que no requiere tocar código:
 
-- **ClaraMoment / ClaraMessage** (solo lectura): la pregunta de apertura, el contador de mensajes y el historial de cada estudiante por página/unidad — lo que hoy consume el widget.
+- **ClaraMoment / ClaraMessage** (solo lectura): la pregunta de apertura, el contador de mensajes/tokens y el historial de cada estudiante por página/unidad — lo que hoy consume el widget.
+- **ClaraMomentLimit** (inline dentro de cada **Course**, o standalone): cuántos **mensajes** y cuántos **tokens** puede consumir el estudiante en cada momento (`bienvenida`/`unidad_1`/`unidad_2`/`cierre`) de ese curso, y el mensaje de cierre que ve al alcanzar cualquiera de los dos. Sin configurar nada, se usa el default (8 mensajes, sin tope propio de tokens). **Importante**: el webhook `/clara/responder` de n8n tiene su propio tope fijo de 8 mensajes en su lógica interna — un `message_limit` **menor** a 8 aquí sí corta antes (Django deja de llamar a n8n); uno **mayor** a 8 no tiene efecto porque n8n corta primero. El mensaje que hace llegar el contador al límite sí se manda a n8n y obtiene una respuesta real; los intentos siguientes ya no se envían y el estudiante ve directamente el mensaje de cierre configurado.
 - **N8nFlow** / **PromptTemplate**: el mecanismo genérico y configurable del flujo anterior (selector de plantillas + webhook por curso). El widget ya no los usa — los webhooks fijos de Clara (`/clara/apertura` y `/clara/responder`, ver `CLARA_APERTURA_URL`/`CLARA_RESPONDER_URL`) los reemplazaron —, pero se dejan por si se necesita un flujo configurable a futuro.
-- **Course**: límite de tokens por curso (vacío = usa `DEFAULT_COURSE_TOKEN_LIMIT`).
+- **Course**: límite de tokens del curso completo, sumando todos los momentos (vacío = usa `DEFAULT_COURSE_TOKEN_LIMIT`). Es un tope aparte y adicional al de `ClaraMomentLimit` por unidad — se evalúan los dos.
 - **CourseEnrollment**: aquí se ve si el chat de un estudiante está deshabilitado por límite, y hay una acción para reactivarlo manualmente.
 
 ## Despliegue en la VPS (sin Docker)
