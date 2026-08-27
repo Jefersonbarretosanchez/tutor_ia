@@ -103,12 +103,29 @@ body {
   color: var(--lti-success);
 }
 
-/* Progreso de mensajes dentro de la unidad */
-.lti-chat-progress {
+/* Progreso del presupuesto de tokens de la unidad (porcentaje_usado de n8n) */
+.lti-chat-moment-progress {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
   font-size: .74rem;
   color: var(--lti-ink-soft);
 }
-.lti-chat-progress.is-near-limit { color: var(--lti-warn); }
+.lti-chat-moment-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--lti-line);
+  overflow: hidden;
+}
+.lti-chat-moment-progress-fill {
+  height: 100%;
+  background: var(--lti-accent);
+  border-radius: 99px;
+}
+.lti-chat-moment-progress.is-near-limit .lti-chat-moment-progress-fill { background: var(--lti-warn); }
+.lti-chat-moment-progress.is-near-limit .lti-chat-moment-progress-label { color: var(--lti-warn); }
+.lti-chat-moment-progress-label { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Log de mensajes */
 .lti-chat-log {

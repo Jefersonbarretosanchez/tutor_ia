@@ -7,7 +7,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.chat.models import ChatMessage, ChatSession, ClaraMessage, ClaraMoment, ClaraMomentLimit, PromptTemplate
+from apps.chat.models import ChatMessage, ChatSession, ClaraMessage, ClaraMoment, PromptTemplate
 from apps.chat.serializers import (
     ChatMessageSerializer,
     ChatSessionSerializer,
@@ -169,14 +169,11 @@ class ClaraMomentView(APIView):
                 moment.delete()
                 raise
 
-            message_limit, _token_limit, _closing_message = ClaraMomentLimit.effective_for(
-                enrollment.course, momento
-            )
             moment.pregunta_id = result["pregunta_id"]
             moment.mensajes_usados = result["mensajes_usados"]
-            moment.limite = message_limit
-            moment.tokens_used = result["tokens_used"]
-            moment.save(update_fields=["pregunta_id", "mensajes_usados", "limite", "tokens_used"])
+            if result["limite"]:
+                moment.limite = result["limite"]
+            moment.save(update_fields=["pregunta_id", "mensajes_usados", "limite"])
             ClaraMessage.objects.create(
                 moment=moment,
                 role=ClaraMessage.ROLE_ASSISTANT,
@@ -199,41 +196,10 @@ class ClaraReplyView(APIView):
         enrollment = request.user.enrollment
         moment = get_object_or_404(ClaraMoment, enrollment=enrollment, momento=momento)
 
-        message_limit, token_limit, closing_message = ClaraMomentLimit.effective_for(enrollment.course, momento)
-
-        def block_moment(code):
-            """
-            Corta ANTES de llamar a n8n, sin fabricar un mensaje de chat: el
-            cierre de la conversación lo da el propio flujo de n8n (su
-            'Responder Limite'), nunca la LTI. Esto solo se usa para el tope
-            de TOKENS (que n8n no conoce) o para un `message_limit` menor al
-            tope real de n8n (8) — ver nota en ClaraMomentLimit.
-            """
-            moment.puede_avanzar = True
-            moment.save(update_fields=["puede_avanzar", "last_activity_at"])
-            if not enrollment.graded_at:
-                grades.mark_activity_completed(enrollment)
-            return Response(
-                {
-                    "error": closing_message,
-                    "code": code,
-                    "mensajes_usados": moment.mensajes_usados,
-                    "limite": message_limit,
-                    "usage": token_ledger.get_usage_status(enrollment).as_dict(),
-                },
-                status=403,
-            )
-
-        if token_limit is not None and moment.tokens_used >= token_limit:
-            return block_moment("moment_token_limit_reached")
-
-        # El mensaje que hace llegar el contador al límite SÍ se manda a
-        # n8n (por eso el +1): su propio flujo interno tiene el mismo tope
-        # (8) y es el que responde el cierre de forma natural. Solo los
-        # intentos posteriores a ese se cortan aquí.
-        if moment.mensajes_usados >= message_limit + 1:
-            return block_moment("moment_message_limit_reached")
-
+        # El control del presupuesto por unidad (tokens) vive enteramente en
+        # el flujo de n8n — Django siempre manda el mensaje y reacciona a lo
+        # que n8n decida (`tipo: "limite_alcanzado"`), nunca corta antes ni
+        # fabrica su propio mensaje de cierre.
         if not token_ledger.has_capacity(enrollment):
             status_info = token_ledger.get_usage_status(enrollment)
             return Response(
@@ -266,10 +232,29 @@ class ClaraReplyView(APIView):
         )
 
         moment.mensajes_usados = result["mensajes_usados"]
-        moment.limite = message_limit
-        moment.tokens_used += result["tokens_used"]
+        if result["limite"]:
+            moment.limite = result["limite"]
+        # "limite_alcanzado" no trae porcentaje_usado/tokens_usados/presupuesto
+        # (ver apps/chat/services/clara_client.py) — se conserva lo último
+        # conocido en vez de pisarlo con None.
+        if result["tokens_usados"] is not None:
+            moment.tokens_used = result["tokens_usados"]
+        if result["presupuesto"] is not None:
+            moment.presupuesto = result["presupuesto"]
+        if result["porcentaje_usado"] is not None:
+            moment.porcentaje_usado = result["porcentaje_usado"]
         moment.puede_avanzar = result["puede_avanzar"]
-        moment.save(update_fields=["mensajes_usados", "limite", "tokens_used", "puede_avanzar", "last_activity_at"])
+        moment.save(
+            update_fields=[
+                "mensajes_usados",
+                "limite",
+                "tokens_used",
+                "presupuesto",
+                "porcentaje_usado",
+                "puede_avanzar",
+                "last_activity_at",
+            ]
+        )
 
         status_info = token_ledger.register_usage(enrollment, None, result["tokens_used"])
 
@@ -283,6 +268,9 @@ class ClaraReplyView(APIView):
                 "puede_avanzar": result["puede_avanzar"],
                 "mensajes_usados": moment.mensajes_usados,
                 "limite": moment.limite,
+                "tokens_used": moment.tokens_used,
+                "porcentaje_usado": moment.porcentaje_usado,
+                "presupuesto": moment.presupuesto,
                 "usage": status_info.as_dict(),
             },
             status=201,

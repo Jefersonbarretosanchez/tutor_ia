@@ -5,7 +5,6 @@ from apps.chat.models import (
     ChatSession,
     ClaraMessage,
     ClaraMoment,
-    ClaraMomentLimit,
     N8nFlow,
     PromptTemplate,
     TokenUsageLedger,
@@ -51,20 +50,15 @@ class ClaraMomentAdmin(admin.ModelAdmin):
         "id",
         "enrollment",
         "momento",
-        "mensajes_usados",
-        "limite",
+        "porcentaje_usado",
         "tokens_used",
+        "presupuesto",
+        "mensajes_usados",
         "puede_avanzar",
         "last_activity_at",
     )
     list_filter = ("momento", "puede_avanzar")
     inlines = [ClaraMessageInline]
-
-
-@admin.register(ClaraMomentLimit)
-class ClaraMomentLimitAdmin(admin.ModelAdmin):
-    list_display = ("course", "momento", "message_limit", "token_limit")
-    list_filter = ("momento", "course")
 
 
 @admin.register(TokenUsageLedger)

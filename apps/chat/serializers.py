@@ -47,7 +47,17 @@ class ClaraMomentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClaraMoment
-        fields = ["id", "momento", "mensajes_usados", "limite", "puede_avanzar", "messages"]
+        fields = [
+            "id",
+            "momento",
+            "mensajes_usados",
+            "limite",
+            "tokens_used",
+            "porcentaje_usado",
+            "presupuesto",
+            "puede_avanzar",
+            "messages",
+        ]
 
 
 class ClaraReplyCreateSerializer(serializers.Serializer):

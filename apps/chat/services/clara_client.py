@@ -71,11 +71,23 @@ def call_apertura(*, user_id: str, course_id: str, momento: str) -> dict:
 
 
 def call_responder(*, user_id: str, course_id: str, momento: str, message: str) -> dict:
-    """Manda la respuesta del estudiante y devuelve el turno del agente (o el aviso de límite)."""
+    """
+    Manda la respuesta del estudiante y devuelve el turno del agente (o el
+    aviso de límite). El presupuesto de tokens por unidad lo controla n8n
+    por completo — cuando `tipo` es "limite_alcanzado", su respuesta no
+    trae `porcentaje_usado`/`tokens_usados`/`presupuesto` (por eso quedan en
+    None: el llamador debe conservar el último valor conocido en vez de
+    pisarlo).
+    """
     data = _post(
         settings.CLARA_RESPONDER_URL,
         {"user_id": user_id, "course_id": course_id, "momento": momento, "message": message},
     )
+
+    def optional_int(key):
+        value = data.get(key)
+        return int(value) if value is not None else None
+
     return {
         "reply": data["reply"],
         "tipo": data.get("tipo", "respuesta"),
@@ -83,4 +95,7 @@ def call_responder(*, user_id: str, course_id: str, momento: str, message: str) 
         "mensajes_usados": int(data.get("mensajes_usados", 0) or 0),
         "limite": int(data.get("limite", 0) or 0),
         "tokens_used": int(data.get("tokens_used", 0) or 0),
+        "tokens_usados": optional_int("tokens_usados"),
+        "presupuesto": optional_int("presupuesto"),
+        "porcentaje_usado": optional_int("porcentaje_usado"),
     }

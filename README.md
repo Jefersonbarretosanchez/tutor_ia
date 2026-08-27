@@ -75,6 +75,7 @@ Copiar `.env.example` a `.env` y completar. Lo importante:
 - `LAUNCH_TOKEN_SECRET`: secreto distinto de `DJANGO_SECRET_KEY` para firmar el token corto del widget.
 - `CLARA_APERTURA_URL` / `CLARA_RESPONDER_URL`: los dos webhooks fijos de n8n que abren el momento y procesan cada turno de la conversación (ver `apps/chat/services/clara_client.py`).
 - `CLARA_COURSE_ID`: el `course_id` que se manda a esos webhooks — hoy es un slug de contenido sembrado en Supabase (`toma_decisiones`, el curso piloto), no el `canvas_course_id` de Canvas.
+- `CLARA_SHOW_TOKEN_COUNT`: `True` para mostrarle al estudiante, además de la barra de progreso, el número de tokens consumidos/presupuesto de la unidad (`False` por defecto — solo se ve el porcentaje).
 
 ## Configurar el Developer Key en Canvas (LTI 1.3)
 
@@ -103,14 +104,11 @@ Copiar `.env.example` a `.env` y completar. Lo importante:
 
 Desde ahí se gestiona todo lo que no requiere tocar código:
 
-- **ClaraMoment / ClaraMessage** (solo lectura): la pregunta de apertura, el contador de mensajes/tokens y el historial de cada estudiante por página/unidad — lo que hoy consume el widget.
-- **ClaraMomentLimit** (inline dentro de cada **Course**, o standalone): cuántos **mensajes** y cuántos **tokens** puede consumir el estudiante en cada momento (`bienvenida`/`unidad_1`/`unidad_2`/`cierre`) de ese curso. Sin configurar nada, se usa el default (8 mensajes, sin tope propio de tokens).
+- **ClaraMoment / ClaraMessage** (solo lectura): la pregunta de apertura, el historial, y el progreso del presupuesto de tokens (`porcentaje_usado`, `presupuesto`, `tokens_used`) de cada estudiante por página/unidad — lo que hoy consume el widget.
 
-  **El cierre de la conversación lo da siempre n8n, nunca Django.** El mensaje del estudiante que hace llegar el contador a `message_limit` SÍ se manda a `/clara/responder` — su lógica interna también tiene un tope fijo de 8, así que es n8n quien responde el cierre de forma natural (su rama "Responder Limite", con el texto que tengan configurado en Supabase). Django solo corta *antes* de llamar a n8n en dos casos: (a) el tope de **tokens** (que n8n no conoce), o (b) intentos **posteriores** al mensaje que ya alcanzó `message_limit`. En esos dos casos se le muestra al estudiante el `closing_message` configurado, pero como un aviso del sistema (no como si lo dijera Clara).
-
-  Por esto mismo, un `message_limit` **menor** a 8 sí corta antes de que n8n intervenga (Django bloquea directamente); uno **mayor o igual** a 8 no tiene efecto propio porque n8n siempre corta primero.
+  **El control del presupuesto por unidad es enteramente de n8n — Django nunca corta la conversación ni fabrica un mensaje de cierre.** Cada turno se manda siempre a `/clara/responder`; n8n decide con su propia lógica interna (presupuesto de tokens por momento, hoy 5560) si responde normalmente (`tipo: "respuesta"`) o si ya no hay presupuesto (`tipo: "limite_alcanzado"`, con su propio mensaje de cierre desde Supabase). Django solo refleja `porcentaje_usado`/`presupuesto` para pintar la barra de progreso, y bloquea el input del estudiante cuando ve `tipo: "limite_alcanzado"`.
 - **N8nFlow** / **PromptTemplate**: el mecanismo genérico y configurable del flujo anterior (selector de plantillas + webhook por curso). El widget ya no los usa — los webhooks fijos de Clara (`/clara/apertura` y `/clara/responder`, ver `CLARA_APERTURA_URL`/`CLARA_RESPONDER_URL`) los reemplazaron —, pero se dejan por si se necesita un flujo configurable a futuro.
-- **Course**: límite de tokens del curso completo, sumando todos los momentos (vacío = usa `DEFAULT_COURSE_TOKEN_LIMIT`). Es un tope aparte y adicional al de `ClaraMomentLimit` por unidad — se evalúan los dos.
+- **Course**: límite de tokens del curso completo, sumando todos los momentos (vacío = usa `DEFAULT_COURSE_TOKEN_LIMIT`). Es un control aparte del presupuesto por unidad que maneja n8n — se evalúan los dos.
 - **CourseEnrollment**: aquí se ve si el chat de un estudiante está deshabilitado por límite, y hay una acción para reactivarlo manualmente.
 
 ## Despliegue en la VPS (sin Docker)

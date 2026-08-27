@@ -5,6 +5,7 @@
   const token = JSON.parse(document.getElementById("lti-chat-token").textContent);
   const apiBase = JSON.parse(document.getElementById("lti-chat-api-base").textContent);
   const momento = JSON.parse(document.getElementById("lti-chat-momento").textContent);
+  const showTokenCount = JSON.parse(document.getElementById("lti-chat-show-tokens").textContent);
   let usage = JSON.parse(document.getElementById("lti-chat-usage").textContent);
 
   const SEND_ICON = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 11.5L20.5 3.5L13 21L10.5 13.5L3 11.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="currentColor" fill-opacity="0.15"/></svg>`;
@@ -96,7 +97,7 @@
     renderUsageBar(body);
 
     const progress = document.createElement("div");
-    progress.className = "lti-chat-progress";
+    progress.className = "lti-chat-moment-progress";
     body.appendChild(progress);
 
     if (moment.puede_avanzar) {
@@ -170,9 +171,17 @@
       sendBtn.disabled = locked;
     }
 
-    function updateProgress(usados, limite) {
-      progress.textContent = `${usados} / ${limite} mensajes en esta unidad`;
-      progress.classList.toggle("is-near-limit", limite - usados <= 2);
+    function updateMomentProgress(pct, tokensUsados, presupuesto) {
+      const pctValue = pct || 0;
+      progress.classList.toggle("is-near-limit", pctValue >= 75);
+      const label =
+        showTokenCount && presupuesto
+          ? `${tokensUsados.toLocaleString("es")} / ${presupuesto.toLocaleString("es")} tokens de esta unidad (${pctValue}%)`
+          : `Progreso de esta unidad: ${pctValue}%`;
+      progress.innerHTML = `
+        <div class="lti-chat-moment-progress-track"><div class="lti-chat-moment-progress-fill" style="width:${pctValue}%"></div></div>
+        <span class="lti-chat-moment-progress-label">${label}</span>
+      `;
     }
 
     function autoResizeTextarea() {
@@ -181,11 +190,7 @@
     }
 
     moment.messages.forEach((msg) => appendBubble(msg.role, msg.content));
-    updateProgress(moment.mensajes_usados, moment.limite);
-
-    if (moment.mensajes_usados >= moment.limite) {
-      lockInput(true);
-    }
+    updateMomentProgress(moment.porcentaje_usado, moment.tokens_used, moment.presupuesto);
 
     textarea.addEventListener("input", autoResizeTextarea);
 
@@ -209,14 +214,14 @@
         appendBubble("assistant", data.message.content);
         usage = data.usage;
         refreshUsageBar(body);
-        updateProgress(data.mensajes_usados, data.limite);
+        updateMomentProgress(data.porcentaje_usado, data.tokens_used, data.presupuesto);
         if (data.puede_avanzar) {
           renderCompletedNotice(body, progress);
         }
         if (usage.blocked) {
           lockInput(true);
           renderBlockedNotice(body);
-        } else if (data.mensajes_usados >= data.limite) {
+        } else if (data.tipo === "limite_alcanzado") {
           lockInput(true);
         } else {
           lockInput(false);
