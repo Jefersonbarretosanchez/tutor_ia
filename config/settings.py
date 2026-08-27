@@ -209,6 +209,24 @@ N8N_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("N8N_REQUEST_TIMEOUT_SECONDS", 
 CHAT_HISTORY_TURNS = int(os.environ.get("CHAT_HISTORY_TURNS", 8))
 
 # --------------------------------------------------------------------------
+# Webhooks fijos de Clara (apertura de momento + turno de conversación) —
+# ver apps/chat/services/clara_client.py.
+# --------------------------------------------------------------------------
+
+CLARA_APERTURA_URL = os.environ.get(
+    "CLARA_APERTURA_URL", "https://scalalearning3.app.n8n.cloud/webhook/clara/apertura"
+)
+CLARA_RESPONDER_URL = os.environ.get(
+    "CLARA_RESPONDER_URL", "https://scalalearning3.app.n8n.cloud/webhook/clara/responder"
+)
+CLARA_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("CLARA_REQUEST_TIMEOUT_SECONDS", 40))
+# El "course_id" que reconoce el workflow de Clara en Supabase es un slug de
+# contenido (p. ej. 'toma_decisiones' para el curso piloto), no el
+# canvas_course_id de Canvas — se manda fijo hasta que haya más de un curso
+# sembrado en Supabase con su propio slug.
+CLARA_COURSE_ID = os.environ.get("CLARA_COURSE_ID", "toma_decisiones")
+
+# --------------------------------------------------------------------------
 # Logging
 # --------------------------------------------------------------------------
 

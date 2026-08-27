@@ -4,6 +4,7 @@
   const root = document.getElementById("lti-chat-root");
   const token = JSON.parse(document.getElementById("lti-chat-token").textContent);
   const apiBase = JSON.parse(document.getElementById("lti-chat-api-base").textContent);
+  const momento = JSON.parse(document.getElementById("lti-chat-momento").textContent);
   let usage = JSON.parse(document.getElementById("lti-chat-usage").textContent);
 
   const SEND_ICON = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 11.5L20.5 3.5L13 21L10.5 13.5L3 11.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="currentColor" fill-opacity="0.15"/></svg>`;
@@ -51,15 +52,16 @@
     container.appendChild(bar);
   }
 
-  function renderBlockedNotice(container) {
+  function renderBlockedNotice(container, text) {
     const notice = document.createElement("div");
     notice.className = "lti-chat-notice";
-    notice.textContent = "Alcanzaste el límite de uso del chat para este curso. Contacta a tu docente si necesitas más.";
+    notice.textContent =
+      text || "Alcanzaste el límite de uso del chat para este curso. Contacta a tu docente si necesitas más.";
     container.appendChild(notice);
   }
 
   async function boot() {
-    root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-body" id="lti-chat-body"><p class="lti-chat-loading">Cargando plantillas…</p></div></div>`;
+    root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-body" id="lti-chat-body"><p class="lti-chat-loading">Cargando…</p></div></div>`;
     const body = document.getElementById("lti-chat-body");
 
     if (usage.blocked) {
@@ -69,51 +71,18 @@
       return;
     }
 
-    let templates;
+    let moment;
     try {
-      templates = await api("templates/", { method: "GET" });
+      moment = await api(`clara/moment/?momento=${encodeURIComponent(momento)}`, { method: "GET" });
     } catch (err) {
-      body.innerHTML = `<p class="lti-chat-error">No se pudieron cargar las plantillas: ${err.message}</p>`;
+      body.innerHTML = `<p class="lti-chat-error">No se pudo abrir el chat: ${err.message}</p>`;
       return;
     }
 
-    body.innerHTML = "";
-    renderUsageBar(body);
-
-    const picker = document.createElement("div");
-    picker.className = "lti-chat-template-picker";
-    picker.innerHTML = "<p>¿Con qué te ayudo hoy?</p>";
-    templates.forEach((tpl) => {
-      const btn = document.createElement("button");
-      btn.className = "lti-chat-template-btn";
-      btn.textContent = tpl.title;
-      btn.title = tpl.description || "";
-      btn.addEventListener("click", () => startSession(tpl));
-      picker.appendChild(btn);
-    });
-    body.appendChild(picker);
+    renderChatUI(moment);
   }
 
-  async function startSession(template) {
-    const body = document.getElementById("lti-chat-body");
-    body.innerHTML = '<p class="lti-chat-loading">Preparando el chat…</p>';
-
-    let data;
-    try {
-      data = await api("sessions/", {
-        method: "POST",
-        body: JSON.stringify({ template_id: template.id }),
-      });
-    } catch (err) {
-      body.innerHTML = `<p class="lti-chat-error">${err.message}</p>`;
-      return;
-    }
-
-    usage = data.usage;
-    renderChatUI(data.session.id);
-  }
-
-  function renderChatUI(sessionId) {
+  function renderChatUI(moment) {
     const body = document.getElementById("lti-chat-body");
     body.innerHTML = "";
     renderUsageBar(body);
@@ -153,6 +122,12 @@
       sendBtn.disabled = locked;
     }
 
+    moment.messages.forEach((msg) => appendBubble(msg.role, msg.content));
+
+    if (moment.mensajes_usados >= moment.limite) {
+      lockInput(true);
+    }
+
     textarea.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -172,9 +147,9 @@
       thinking.classList.add("is-thinking");
 
       try {
-        const data = await api(`sessions/${sessionId}/messages/`, {
+        const data = await api("clara/reply/", {
           method: "POST",
-          body: JSON.stringify({ message: text }),
+          body: JSON.stringify({ momento, message: text }),
         });
         thinking.remove();
         appendBubble("assistant", data.message.content);
@@ -183,6 +158,8 @@
         if (usage.blocked) {
           lockInput(true);
           renderBlockedNotice(body);
+        } else if (data.mensajes_usados >= data.limite) {
+          lockInput(true);
         } else {
           lockInput(false);
           textarea.focus();

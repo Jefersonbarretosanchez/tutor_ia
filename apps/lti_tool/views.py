@@ -8,10 +8,12 @@ from pylti1p3.contrib.django import DjangoMessageLaunch, DjangoOIDCLogin
 from pylti1p3.exception import LtiException
 
 from apps.chat.auth import encode_launch_token
+from apps.chat.models import ClaraMoment
 from apps.chat.services import token_ledger
 from apps.lti_tool.lti_config import (
     extract_course_fields,
     extract_enrollment_fields,
+    extract_momento,
     extract_student_fields,
     get_launch_data_storage,
     get_tool_conf,
@@ -72,6 +74,29 @@ def launch(request):
 
     if not course_fields["context_id"] or not student_fields["sub"]:
         error = "El lanzamiento no trae 'context.id' o 'sub' — revisa los claims habilitados en el Developer Key."
+        LtiLaunchLog.objects.create(
+            issuer=launch_data.get("iss", ""),
+            client_id=launch_data.get("aud", ""),
+            sub=student_fields["sub"],
+            ip_address=_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:512],
+            validated=False,
+            error=error,
+        )
+        return render(request, "lti_tool/launch_error.html", {"error": error}, status=400)
+
+    # El query param `?momento=` en la Target Link URI configurada para esa
+    # página en Canvas es el mecanismo que funciona sin Deep Linking (los
+    # Custom Parameters de LTI 1.3 se configuran a nivel del Developer Key,
+    # no por página). Se deja el Custom Parameter LTI como respaldo, por si
+    # a futuro se implementa Deep Linking y se prefiere configurarlo así.
+    momento = request.GET.get("momento", "").strip() or extract_momento(launch_data)
+    if momento not in dict(ClaraMoment.MOMENTO_CHOICES):
+        error = (
+            "Esta página no tiene configurado el parámetro 'momento' en su URL de lanzamiento "
+            f"(valores permitidos: {', '.join(code for code, _ in ClaraMoment.MOMENTO_CHOICES)}). "
+            "Revisa la configuración del link en Canvas."
+        )
         LtiLaunchLog.objects.create(
             issuer=launch_data.get("iss", ""),
             client_id=launch_data.get("aud", ""),
@@ -145,6 +170,7 @@ def launch(request):
             "api_base": "/api/",
             "course_title": course.title or course.context_id,
             "usage": usage.as_dict(),
+            "momento": momento,
         },
     )
 

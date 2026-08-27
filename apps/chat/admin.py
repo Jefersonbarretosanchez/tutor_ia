@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from apps.chat.models import ChatMessage, ChatSession, N8nFlow, PromptTemplate, TokenUsageLedger
+from apps.chat.models import (
+    ChatMessage,
+    ChatSession,
+    ClaraMessage,
+    ClaraMoment,
+    N8nFlow,
+    PromptTemplate,
+    TokenUsageLedger,
+)
 
 
 @admin.register(N8nFlow)
@@ -27,6 +35,20 @@ class ChatSessionAdmin(admin.ModelAdmin):
     list_display = ("id", "enrollment", "template", "status", "started_at")
     list_filter = ("status", "template")
     inlines = [ChatMessageInline]
+
+
+class ClaraMessageInline(admin.TabularInline):
+    model = ClaraMessage
+    extra = 0
+    readonly_fields = [f.name for f in ClaraMessage._meta.fields]
+    can_delete = False
+
+
+@admin.register(ClaraMoment)
+class ClaraMomentAdmin(admin.ModelAdmin):
+    list_display = ("id", "enrollment", "momento", "mensajes_usados", "limite", "puede_avanzar", "last_activity_at")
+    list_filter = ("momento", "puede_avanzar")
+    inlines = [ClaraMessageInline]
 
 
 @admin.register(TokenUsageLedger)

@@ -95,22 +95,6 @@ body {
   font-size: .84rem;
 }
 
-/* Selección de plantilla */
-.lti-chat-template-picker { display: flex; flex-direction: column; gap: .5rem; }
-.lti-chat-template-picker p { margin: 0 0 .3rem; font-size: .9rem; color: var(--lti-ink-soft); }
-.lti-chat-template-btn {
-  text-align: left;
-  padding: .7rem .9rem;
-  border-radius: 14px;
-  border: 1px solid var(--lti-line);
-  background: var(--lti-surface);
-  color: var(--lti-ink);
-  font-size: .9rem;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(20, 10, 50, 0.04);
-}
-.lti-chat-template-btn:hover { border-color: var(--lti-accent); background: var(--lti-accent-soft); }
-
 /* Log de mensajes */
 .lti-chat-log {
   flex: 1;

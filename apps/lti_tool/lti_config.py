@@ -65,3 +65,13 @@ def extract_enrollment_fields(launch_data: dict) -> dict:
     return {
         "section_ids": custom.get("canvas_course_section_ids", ""),
     }
+
+
+def extract_momento(launch_data: dict) -> str:
+    """
+    Lee el Custom Parameter LTI `momento` configurado en el placement de la
+    página de Canvas — así distinguimos la unidad/página desde la que se
+    lanzó el chat de Clara (ver apps.chat.models.ClaraMoment).
+    """
+    custom = launch_data.get(CLAIM_CUSTOM, {}) or {}
+    return (custom.get("momento") or "").strip()

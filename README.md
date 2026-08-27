@@ -1,8 +1,11 @@
 # LTI Chat Scala
 
-Herramienta LTI 1.3 para Canvas, en Django, que embebe un chat de agentes de
-IA orquestados en n8n dentro de una página de curso, con selección de
-plantilla sugerida y control de consumo de tokens por estudiante y curso.
+Herramienta LTI 1.3 para Canvas, en Django, que embebe el chat de Clara
+(agente de IA orquestado en n8n) dentro de cada página/unidad de un curso:
+al abrir el chat se le muestra directamente la pregunta de apertura de esa
+unidad (sin selector), se guarda por estudiante y por página para no
+volver a pedirla, y se mantiene el historial de esa conversación — todo
+con control de consumo de tokens por estudiante y curso.
 
 Este repo es el MVP descrito en el documento de alcance del proyecto
 (fases 0 y 1 del roadmap): lanzamiento LTI 1.3, modelo de datos, control de
@@ -70,6 +73,8 @@ Copiar `.env.example` a `.env` y completar. Lo importante:
 - `REDIS_URL`: **requerido en producción** si Gunicorn corre con más de un worker. pylti1p3 guarda el `nonce`/`state` del login OIDC en el cache de Django — si cada worker tuviera su propia memoria (`LocMemCache`), el login podría iniciar en un worker y el launch validarse en otro, y fallar. Con `REDIS_URL` sin configurar, el proyecto cae a memoria local (solo válido con `--workers 1`, es decir, para desarrollo).
 - `LTI_FRAME_ANCESTORS`: dominio(s) de Canvas que pueden embeber el chat en un iframe.
 - `LAUNCH_TOKEN_SECRET`: secreto distinto de `DJANGO_SECRET_KEY` para firmar el token corto del widget.
+- `CLARA_APERTURA_URL` / `CLARA_RESPONDER_URL`: los dos webhooks fijos de n8n que abren el momento y procesan cada turno de la conversación (ver `apps/chat/services/clara_client.py`).
+- `CLARA_COURSE_ID`: el `course_id` que se manda a esos webhooks — hoy es un slug de contenido sembrado en Supabase (`toma_decisiones`, el curso piloto), no el `canvas_course_id` de Canvas.
 
 ## Configurar el Developer Key en Canvas (LTI 1.3)
 
@@ -82,14 +87,24 @@ Copiar `.env.example` a `.env` y completar. Lo importante:
 7. En `/admin/` de Django, crear:
    - Una **LTI Tool Key** (clave RSA propia de la herramienta — puedes generarla con `openssl genrsa 2048`, o dejar que `seed_demo` la genere si estás probando).
    - Un **LTI Tool** con el issuer/client_id/URLs del paso 6, la key anterior, y el/los `deployment_id` que Canvas asigna al instalar la herramienta en un curso.
-8. Instalar la herramienta en un curso de prueba y abrirla — debería aterrizar en `chat_frame.html`.
+8. **Por cada página/unidad de Canvas** donde se inserte el link de la herramienta (asignación, página, o item de módulo de tipo "External Tool"), la URL de lanzamiento debe llevar `?momento=<valor>` al final, con uno de estos valores: `bienvenida`, `unidad_1`, `unidad_2` o `cierre`. Por ejemplo:
+
+   ```
+   https://tu-dominio/lti/launch/?momento=bienvenida
+   https://tu-dominio/lti/launch/?momento=unidad_1
+   https://tu-dominio/lti/launch/?momento=unidad_2
+   https://tu-dominio/lti/launch/?momento=cierre
+   ```
+
+   Django lo usa para saber qué pregunta de apertura de Clara pedirle a n8n y para guardar el historial de chat por separado en cada página — si falta o no es uno de esos valores, el lanzamiento falla con un error explicativo. (Se usa el query param y no un Custom Parameter LTI porque estos últimos se configuran a nivel del Developer Key en Canvas —global— y no varían por página sin Deep Linking.)
+9. Instalar la herramienta en un curso de prueba y abrirla — debería aterrizar en `chat_frame.html`.
 
 ## Panel de administración (`/admin/`)
 
 Desde ahí se gestiona todo lo que no requiere tocar código:
 
-- **N8nFlow**: URL del webhook, secreto compartido (`X-Internal-Token`), timeout.
-- **PromptTemplate**: qué plantillas se sugieren, por curso o globales, y a qué `N8nFlow` apunta cada una (reutilizando el `momento_tipo` que ya existe en el workflow de Clara: bienvenida / diagnostico / cierre / libre).
+- **ClaraMoment / ClaraMessage** (solo lectura): la pregunta de apertura, el contador de mensajes y el historial de cada estudiante por página/unidad — lo que hoy consume el widget.
+- **N8nFlow** / **PromptTemplate**: el mecanismo genérico y configurable del flujo anterior (selector de plantillas + webhook por curso). El widget ya no los usa — los webhooks fijos de Clara (`/clara/apertura` y `/clara/responder`, ver `CLARA_APERTURA_URL`/`CLARA_RESPONDER_URL`) los reemplazaron —, pero se dejan por si se necesita un flujo configurable a futuro.
 - **Course**: límite de tokens por curso (vacío = usa `DEFAULT_COURSE_TOKEN_LIMIT`).
 - **CourseEnrollment**: aquí se ve si el chat de un estudiante está deshabilitado por límite, y hay una acción para reactivarlo manualmente.
 

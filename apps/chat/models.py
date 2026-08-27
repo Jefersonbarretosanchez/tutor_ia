@@ -124,6 +124,75 @@ class ChatMessage(models.Model):
         return f"[{self.role}] {self.content[:40]}"
 
 
+class ClaraMoment(models.Model):
+    """
+    Estado del flujo de apertura/conversación de Clara (webhooks n8n
+    `/clara/apertura` y `/clara/responder`) para un estudiante en un
+    momento puntual del curso (una unidad/página, identificada por el
+    Custom Parameter LTI `momento` configurado en esa página de Canvas).
+
+    Un único registro por (enrollment, momento): la pregunta de apertura y
+    el historial no se vuelven a pedir al webhook si el estudiante ya
+    tiene uno para esa página — solo se recupera lo ya guardado.
+    """
+
+    MOMENTO_BIENVENIDA = "bienvenida"
+    MOMENTO_UNIDAD_1 = "unidad_1"
+    MOMENTO_UNIDAD_2 = "unidad_2"
+    MOMENTO_CIERRE = "cierre"
+    MOMENTO_CHOICES = [
+        (MOMENTO_BIENVENIDA, "Bienvenida"),
+        (MOMENTO_UNIDAD_1, "Unidad 1"),
+        (MOMENTO_UNIDAD_2, "Unidad 2"),
+        (MOMENTO_CIERRE, "Cierre de curso"),
+    ]
+
+    enrollment = models.ForeignKey(
+        "lti_tool.CourseEnrollment",
+        on_delete=models.CASCADE,
+        related_name="clara_moments",
+    )
+    momento = models.CharField(max_length=20, choices=MOMENTO_CHOICES)
+    pregunta_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Id de la pregunta detonadora en Supabase (campo 'pregunta_id' de /clara/apertura).",
+    )
+    mensajes_usados = models.PositiveIntegerField(default=0)
+    limite = models.PositiveIntegerField(default=8)
+    puede_avanzar = models.BooleanField(default=False)
+    started_at = models.DateTimeField(auto_now_add=True)
+    last_activity_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("enrollment", "momento")]
+        ordering = ["-last_activity_at"]
+
+    def __str__(self):
+        return f"{self.enrollment} · {self.momento}"
+
+
+class ClaraMessage(models.Model):
+    ROLE_USER = "user"
+    ROLE_ASSISTANT = "assistant"
+    ROLE_CHOICES = [
+        (ROLE_USER, "Estudiante"),
+        (ROLE_ASSISTANT, "Clara"),
+    ]
+
+    moment = models.ForeignKey(ClaraMoment, on_delete=models.CASCADE, related_name="messages")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    content = models.TextField()
+    tokens_used = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"[{self.role}] {self.content[:40]}"
+
+
 class TokenUsageLedger(models.Model):
     """
     Registro append-only del consumo de tokens. Nunca se actualiza ni se
