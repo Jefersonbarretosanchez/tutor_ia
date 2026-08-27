@@ -5,7 +5,8 @@
   const token = JSON.parse(document.getElementById("lti-chat-token").textContent);
   const apiBase = JSON.parse(document.getElementById("lti-chat-api-base").textContent);
   const momento = JSON.parse(document.getElementById("lti-chat-momento").textContent);
-  const showTokenCount = JSON.parse(document.getElementById("lti-chat-show-tokens").textContent);
+  const showUnitTokenCount = JSON.parse(document.getElementById("lti-chat-show-unit-tokens").textContent);
+  const showCourseUsage = JSON.parse(document.getElementById("lti-chat-show-course-usage").textContent);
   let usage = JSON.parse(document.getElementById("lti-chat-usage").textContent);
 
   const SEND_ICON = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 11.5L20.5 3.5L13 21L10.5 13.5L3 11.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="currentColor" fill-opacity="0.15"/></svg>`;
@@ -43,13 +44,10 @@
   }
 
   function renderUsageBar(container) {
-    const pct = usage.limit ? Math.min(100, Math.round((usage.tokens_used / usage.limit) * 100)) : 0;
+    if (!showCourseUsage) return;
     const bar = document.createElement("div");
     bar.className = "lti-chat-usage" + (usage.warning ? " is-warning" : "") + (usage.blocked ? " is-blocked" : "");
-    bar.innerHTML = `
-      <div class="lti-chat-usage-track"><div class="lti-chat-usage-fill" style="width:${pct}%"></div></div>
-      <span class="lti-chat-usage-label">${usage.tokens_used.toLocaleString("es")} / ${usage.limit.toLocaleString("es")} tokens</span>
-    `;
+    bar.innerHTML = `<span class="lti-chat-usage-label">${usage.tokens_used.toLocaleString("es")} tokens consumidos en este curso</span>`;
     container.appendChild(bar);
   }
 
@@ -175,7 +173,7 @@
       const pctValue = pct || 0;
       progress.classList.toggle("is-near-limit", pctValue >= 75);
       const label =
-        showTokenCount && presupuesto
+        showUnitTokenCount && presupuesto
           ? `${tokensUsados.toLocaleString("es")} / ${presupuesto.toLocaleString("es")} tokens de esta unidad (${pctValue}%)`
           : `Progreso de esta unidad: ${pctValue}%`;
       progress.innerHTML = `
@@ -260,6 +258,10 @@
 
   function refreshUsageBar(container) {
     const old = container.querySelector(".lti-chat-usage");
+    if (!showCourseUsage) {
+      if (old) old.remove();
+      return;
+    }
     const wrapper = document.createElement("div");
     renderUsageBar(wrapper);
     const fresh = wrapper.firstChild;

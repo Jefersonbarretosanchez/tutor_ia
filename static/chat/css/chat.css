@@ -67,28 +67,13 @@ body {
 }
 .lti-chat-error { color: var(--lti-danger-ink); }
 
-/* Barra de consumo de tokens */
+/* Consumo de tokens de todo el curso (solo el número, sin límite ni barra) */
 .lti-chat-usage {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
   font-size: .74rem;
   color: var(--lti-ink-soft);
 }
-.lti-chat-usage-track {
-  flex: 1;
-  height: 6px;
-  border-radius: 99px;
-  background: var(--lti-line);
-  overflow: hidden;
-}
-.lti-chat-usage-fill {
-  height: 100%;
-  background: var(--lti-accent);
-  border-radius: 99px;
-}
-.lti-chat-usage.is-warning .lti-chat-usage-fill { background: var(--lti-warn); }
-.lti-chat-usage.is-blocked .lti-chat-usage-fill { background: var(--lti-danger-ink); }
+.lti-chat-usage.is-warning { color: var(--lti-warn); }
+.lti-chat-usage.is-blocked { color: var(--lti-danger-ink); }
 .lti-chat-usage-label { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .lti-chat-notice {

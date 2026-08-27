@@ -57,6 +57,20 @@ class Course(models.Model):
         blank=True,
         help_text="Límite de tokens por estudiante en este curso. Vacío = usar el valor por defecto global.",
     )
+    show_unit_token_count = models.BooleanField(
+        default=False,
+        help_text=(
+            "La barra de progreso de cada unidad siempre muestra el porcentaje de Clara. "
+            "Marca esto para que además se le muestre al estudiante el número de tokens consumidos/presupuesto."
+        ),
+    )
+    show_course_token_usage = models.BooleanField(
+        default=True,
+        help_text=(
+            "Muestra en el chat cuántos tokens ha consumido el estudiante en total en este curso "
+            "(un número, sin el límite configurado ni barra de progreso)."
+        ),
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

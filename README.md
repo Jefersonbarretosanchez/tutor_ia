@@ -75,7 +75,6 @@ Copiar `.env.example` a `.env` y completar. Lo importante:
 - `LAUNCH_TOKEN_SECRET`: secreto distinto de `DJANGO_SECRET_KEY` para firmar el token corto del widget.
 - `CLARA_APERTURA_URL` / `CLARA_RESPONDER_URL`: los dos webhooks fijos de n8n que abren el momento y procesan cada turno de la conversación (ver `apps/chat/services/clara_client.py`).
 - `CLARA_COURSE_ID`: el `course_id` que se manda a esos webhooks — hoy es un slug de contenido sembrado en Supabase (`toma_decisiones`, el curso piloto), no el `canvas_course_id` de Canvas.
-- `CLARA_SHOW_TOKEN_COUNT`: `True` para mostrarle al estudiante, además de la barra de progreso, el número de tokens consumidos/presupuesto de la unidad (`False` por defecto — solo se ve el porcentaje).
 
 ## Configurar el Developer Key en Canvas (LTI 1.3)
 
@@ -108,7 +107,9 @@ Desde ahí se gestiona todo lo que no requiere tocar código:
 
   **El control del presupuesto por unidad es enteramente de n8n — Django nunca corta la conversación ni fabrica un mensaje de cierre.** Cada turno se manda siempre a `/clara/responder`; n8n decide con su propia lógica interna (presupuesto de tokens por momento, hoy 5560) si responde normalmente (`tipo: "respuesta"`) o si ya no hay presupuesto (`tipo: "limite_alcanzado"`, con su propio mensaje de cierre desde Supabase). Django solo refleja `porcentaje_usado`/`presupuesto` para pintar la barra de progreso, y bloquea el input del estudiante cuando ve `tipo: "limite_alcanzado"`.
 - **N8nFlow** / **PromptTemplate**: el mecanismo genérico y configurable del flujo anterior (selector de plantillas + webhook por curso). El widget ya no los usa — los webhooks fijos de Clara (`/clara/apertura` y `/clara/responder`, ver `CLARA_APERTURA_URL`/`CLARA_RESPONDER_URL`) los reemplazaron —, pero se dejan por si se necesita un flujo configurable a futuro.
-- **Course**: límite de tokens del curso completo, sumando todos los momentos (vacío = usa `DEFAULT_COURSE_TOKEN_LIMIT`). Es un control aparte del presupuesto por unidad que maneja n8n — se evalúan los dos.
+- **Course**: límite de tokens del curso completo, sumando todos los momentos (vacío = usa `DEFAULT_COURSE_TOKEN_LIMIT`) — es un control aparte del presupuesto por unidad que maneja n8n, se evalúan los dos. Dos casillas más, ambas por curso:
+  - **`show_course_token_usage`** (activada por defecto): muestra en el chat cuántos tokens ha consumido el estudiante en total en el curso — un número simple, sin el límite ni una barra de progreso. Desactívala para ocultar ese dato por completo.
+  - **`show_unit_token_count`** (desactivada por defecto): además de la barra de progreso de cada unidad (que siempre se ve, con el porcentaje), muestra también el número de tokens consumidos/presupuesto de esa unidad puntual.
 - **CourseEnrollment**: aquí se ve si el chat de un estudiante está deshabilitado por límite, y hay una acción para reactivarlo manualmente.
 
 ## Despliegue en la VPS (sin Docker)

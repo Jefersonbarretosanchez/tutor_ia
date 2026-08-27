@@ -171,7 +171,8 @@ def launch(request):
             "course_title": course.title or course.context_id,
             "usage": usage.as_dict(),
             "momento": momento,
-            "show_token_count": settings.CLARA_SHOW_TOKEN_COUNT,
+            "show_unit_token_count": course.show_unit_token_count,
+            "show_course_token_usage": course.show_course_token_usage,
         },
     )
 

@@ -5,7 +5,16 @@ from .models import Course, CourseEnrollment, LtiLaunchLog, Student
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ("title", "context_id", "lti_tool", "token_limit", "is_active", "ags_enabled")
+    list_display = (
+        "title",
+        "context_id",
+        "lti_tool",
+        "token_limit",
+        "show_course_token_usage",
+        "show_unit_token_count",
+        "is_active",
+        "ags_enabled",
+    )
     list_filter = ("is_active", "lti_tool")
     search_fields = ("title", "context_id", "canvas_course_id")
 

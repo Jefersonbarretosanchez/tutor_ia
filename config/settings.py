@@ -225,10 +225,6 @@ CLARA_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("CLARA_REQUEST_TIMEOUT_SECOND
 # canvas_course_id de Canvas — se manda fijo hasta que haya más de un curso
 # sembrado en Supabase con su propio slug.
 CLARA_COURSE_ID = os.environ.get("CLARA_COURSE_ID", "toma_decisiones")
-# La barra de progreso de la unidad siempre se pinta con el "porcentaje_usado"
-# que reporta n8n. Este flag solo controla si, además de la barra, se le
-# muestra al estudiante el número crudo de tokens consumidos/presupuesto.
-CLARA_SHOW_TOKEN_COUNT = env_bool("CLARA_SHOW_TOKEN_COUNT", default=False)
 
 # --------------------------------------------------------------------------
 # Logging
