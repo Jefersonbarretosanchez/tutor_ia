@@ -7,3 +7,8 @@ db.sqlite3
 staticfiles/
 keys/*.pem
 *.log
+
+# graphify (local knowledge graph tool - never commit)
+/graphify-out/
+/CLAUDE.md
+/.claude/settings.json
