@@ -159,6 +159,28 @@ def launch(request):
         validated=True,
     )
 
+    if request.GET.get("gate"):
+        # Botón de nav gateado (ver templates/lti_tool/gate_button.html): un
+        # iframe pequeño que dispara este mismo lanzamiento LTI y dibuja un
+        # botón de 2 estados según ClaraMoment.puede_avanzar — no es una
+        # sesión de chat, así que no arma launch_token ni toca token_ledger.
+        label = request.GET.get("label", "")
+        icon = request.GET.get("icon", "lock")
+
+        gate_cfg = course.page_gates.filter(momento=momento).first()
+        moment = ClaraMoment.objects.filter(enrollment=enrollment, momento=momento).first()
+        unlocked = bool(moment and moment.puede_avanzar and gate_cfg)
+
+        destino = None
+        if unlocked:
+            destino = f"{settings.CANVAS_API_BASE_URL}/courses/{course.canvas_course_id}/pages/{gate_cfg.canvas_page_url}"
+
+        return render(
+            request,
+            "lti_tool/gate_button.html",
+            {"unlocked": unlocked, "destino": destino, "label": label, "icon": icon},
+        )
+
     token = encode_launch_token(enrollment)
     usage = token_ledger.get_usage_status(enrollment)
 

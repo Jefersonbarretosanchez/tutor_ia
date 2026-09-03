@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Nav</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    /*
+      Colores/espaciados son un punto de partida — se piensa para vivir
+      dentro de un iframe pequeño embebido en el nav de la página de
+      Canvas (scala-anchornav), así que hay que afinarlos a mano contra
+      ese diseño una vez montado.
+    */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: transparent;
+      font-family: system-ui, sans-serif;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-item {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .4rem .7rem;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: .85rem;
+      white-space: nowrap;
+    }
+    .nav-item.unlocked {
+      color: #171b23;
+      cursor: pointer;
+    }
+    .nav-item.locked {
+      color: #9aa1a9;
+      cursor: not-allowed;
+    }
+    .lock-badge {
+      font-size: .7em;
+      margin-left: .15rem;
+    }
+  </style>
+</head>
+<body>
+  {% if unlocked %}
+    <a class="nav-item unlocked" href="{{ destino }}" target="_top">
+      <i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>
+      {% if label %}<span>{{ label }}</span>{% endif %}
+    </a>
+  {% else %}
+    <span class="nav-item locked" title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
+      <i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>
+      {% if label %}<span>{{ label }}</span>{% endif %}
+      <i class="fa-solid fa-lock lock-badge" aria-hidden="true"></i>
+    </span>
+  {% endif %}
+</body>
+</html>
