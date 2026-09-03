@@ -18,7 +18,7 @@ from apps.chat.serializers import (
     PromptTemplateSerializer,
     SessionStartSerializer,
 )
-from apps.chat.services import grades, token_ledger
+from apps.chat.services import canvas_pages, grades, token_ledger
 from apps.chat.services.clara_client import ClaraError, call_apertura, call_responder
 from apps.chat.services.n8n_client import call_flow
 
@@ -263,6 +263,9 @@ class ClaraReplyView(APIView):
 
         if result["puede_avanzar"] and not enrollment.graded_at:
             grades.mark_activity_completed(enrollment)
+
+        if result["puede_avanzar"] and not moment.page_unlocked_at:
+            canvas_pages.unlock_page_for_student(moment)
 
         return Response(
             {

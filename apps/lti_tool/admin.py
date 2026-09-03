@@ -1,6 +1,8 @@
 from django.contrib import admin
 
-from .models import Course, CourseEnrollment, LtiLaunchLog, Student
+from apps.chat.services import canvas_pages
+
+from .models import Course, CourseEnrollment, CoursePageGate, LtiLaunchLog, Student
 
 
 @admin.register(Course)
@@ -21,6 +23,19 @@ class CourseAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="AGS")
     def ags_enabled(self, obj):
         return bool(obj.ags_lineitems_url)
+
+
+@admin.register(CoursePageGate)
+class CoursePageGateAdmin(admin.ModelAdmin):
+    list_display = ("course", "momento", "canvas_page_url", "locked_at")
+    list_filter = ("course",)
+    search_fields = ("canvas_page_url", "momento")
+    actions = ["bloquear_pagina_ahora"]
+
+    @admin.action(description="Bloquear página ahora (only_visible_to_overrides)")
+    def bloquear_pagina_ahora(self, request, queryset):
+        ok = sum(1 for gate in queryset if canvas_pages.lock_page(gate))
+        self.message_user(request, f"{ok}/{queryset.count()} página(s) bloqueada(s) correctamente.")
 
 
 @admin.register(Student)

@@ -89,6 +89,43 @@ class Course(models.Model):
         return self.token_limit or settings.DEFAULT_COURSE_TOKEN_LIMIT
 
 
+class CoursePageGate(models.Model):
+    """
+    Qué página de Canvas desbloquear (vía "Asignar acceso" / date_details)
+    cuando un `momento` de ese curso llega a `ClaraMoment.puede_avanzar=True`.
+
+    Ver apps.chat.services.canvas_pages — el chat solo vive en la página
+    "Aprende" de cada unidad, así que el `momento` (p. ej. "unidad_1") ya
+    identifica sin ambigüedad qué completó el estudiante.
+    """
+
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="page_gates")
+    momento = models.CharField(
+        max_length=20,
+        help_text="Mismo valor que apps.chat.models.ClaraMoment.MOMENTO_CHOICES (p. ej. 'unidad_1').",
+    )
+    canvas_page_url = models.CharField(
+        max_length=255,
+        help_text=(
+            "Slug de la página de Canvas a desbloquear — el 'url_or_id' que aparece en "
+            "/courses/:id/pages/<esto>, p. ej. 'unidad-1-profundiza'."
+        ),
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Cuándo se puso only_visible_to_overrides=true en esta página (setup inicial). Vacío = todavía no.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("course", "momento")]
+
+    def __str__(self):
+        return f"{self.course} · {self.momento} → {self.canvas_page_url}"
+
+
 class Student(models.Model):
     """Un estudiante, identificado por el claim estándar `sub` de LTI."""
 

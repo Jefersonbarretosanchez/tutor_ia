@@ -227,6 +227,17 @@ CLARA_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("CLARA_REQUEST_TIMEOUT_SECOND
 CLARA_COURSE_ID = os.environ.get("CLARA_COURSE_ID", "toma_decisiones")
 
 # --------------------------------------------------------------------------
+# API REST de Canvas (para "Asignar acceso" de páginas) — ver
+# apps/chat/services/canvas_pages.py. Es un token distinto del Developer
+# Key LTI: requiere permiso de edición de curso (Personal Access Token o
+# Developer Key OAuth2 propio), no solo scopes de LTI Advantage.
+# --------------------------------------------------------------------------
+
+CANVAS_API_BASE_URL = os.environ.get("CANVAS_API_BASE_URL", "https://uandinavirtual.instructure.com")
+CANVAS_API_TOKEN = os.environ.get("CANVAS_API_TOKEN", "")
+CANVAS_API_TIMEOUT_SECONDS = int(os.environ.get("CANVAS_API_TIMEOUT_SECONDS", 15))
+
+# --------------------------------------------------------------------------
 # Logging
 # --------------------------------------------------------------------------
 

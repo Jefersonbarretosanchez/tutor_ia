@@ -177,6 +177,14 @@ class ClaraMoment(models.Model):
         help_text="Porcentaje de presupuesto consumido, tal como lo reporta n8n (campo 'porcentaje_usado') — controla la barra de progreso.",
     )
     puede_avanzar = models.BooleanField(default=False)
+    page_unlocked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Cuándo se agregó al estudiante al 'Asignar acceso' de la página de Canvas "
+            "configurada para este momento (ver lti_tool.CoursePageGate). Vacío = todavía no."
+        ),
+    )
     started_at = models.DateTimeField(auto_now_add=True)
     last_activity_at = models.DateTimeField(auto_now=True)
 
