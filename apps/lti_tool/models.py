@@ -120,7 +120,7 @@ class CoursePageGate(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = [("course", "momento")]
+        unique_together = [("course", "momento", "canvas_page_url")]
 
     def __str__(self):
         return f"{self.course} · {self.momento} → {self.canvas_page_url}"

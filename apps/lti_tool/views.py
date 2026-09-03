@@ -166,8 +166,9 @@ def launch(request):
         # sesión de chat, así que no arma launch_token ni toca token_ledger.
         label = request.GET.get("label", "")
         icon = request.GET.get("icon", "lock")
+        target = request.GET.get("target", "")
 
-        gate_cfg = course.page_gates.filter(momento=momento).first()
+        gate_cfg = course.page_gates.filter(momento=momento, canvas_page_url=target).first()
         moment = ClaraMoment.objects.filter(enrollment=enrollment, momento=momento).first()
         unlocked = bool(moment and moment.puede_avanzar and gate_cfg)
 

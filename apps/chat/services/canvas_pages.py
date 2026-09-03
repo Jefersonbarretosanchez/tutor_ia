@@ -45,30 +45,7 @@ def _headers():
     return {"Authorization": f"Bearer {settings.CANVAS_API_TOKEN}"}
 
 
-def unlock_page_for_student(moment) -> bool:
-    """
-    Agrega al estudiante de `moment` al override de la página configurada
-    para su `momento` en este curso. Nunca propaga la excepción hacia
-    arriba — un fallo del API de Canvas no debe romper la respuesta del
-    chat, solo queda logueado para revisar.
-    """
-    enrollment = moment.enrollment
-    course = enrollment.course
-    student = enrollment.student
-
-    gate = course.page_gates.filter(momento=moment.momento).first()
-    if not gate:
-        # Este momento no tiene página configurada todavía — no-op silencioso.
-        return False
-
-    if not course.canvas_course_id or not student.canvas_user_id:
-        logger.warning(
-            "Canvas pages: falta canvas_course_id/canvas_user_id para %s — "
-            "revisa las Custom Variables del Developer Key.",
-            enrollment,
-        )
-        return False
-
+def _unlock_single_page(course, student, gate) -> bool:
     url = _date_details_url(course, gate)
 
     try:
@@ -98,17 +75,51 @@ def unlock_page_for_student(moment) -> bool:
             )
             put_resp.raise_for_status()
     except requests.RequestException:
-        logger.exception("Canvas pages: fallo desbloqueando %s para %s", gate.canvas_page_url, enrollment)
+        logger.exception("Canvas pages: fallo desbloqueando %s para %s", gate.canvas_page_url, student)
         return False
     except Exception:
-        logger.exception(
-            "Canvas pages: fallo inesperado desbloqueando %s para %s", gate.canvas_page_url, enrollment
+        logger.exception("Canvas pages: fallo inesperado desbloqueando %s para %s", gate.canvas_page_url, student)
+        return False
+
+    logger.info("Canvas pages: %s desbloqueó %s", student, gate.canvas_page_url)
+    return True
+
+
+def unlock_page_for_student(moment) -> bool:
+    """
+    Agrega al estudiante de `moment` al override de TODAS las páginas
+    configuradas para su `momento` en este curso (puede haber varias — p.
+    ej. Profundiza, Aplica e Interactúa desbloqueándose juntas al terminar
+    "Aprende"). Nunca propaga la excepción hacia arriba — un fallo del API
+    de Canvas no debe romper la respuesta del chat, solo queda logueado.
+
+    Solo marca `page_unlocked_at` si TODAS se desbloquearon — así, si una
+    falla, el próximo turno del chat reintenta el lote completo en vez de
+    dejar esa página bloqueada para siempre.
+    """
+    enrollment = moment.enrollment
+    course = enrollment.course
+    student = enrollment.student
+
+    gates = list(course.page_gates.filter(momento=moment.momento))
+    if not gates:
+        # Este momento no tiene páginas configuradas todavía — no-op silencioso.
+        return False
+
+    if not course.canvas_course_id or not student.canvas_user_id:
+        logger.warning(
+            "Canvas pages: falta canvas_course_id/canvas_user_id para %s — "
+            "revisa las Custom Variables del Developer Key.",
+            enrollment,
         )
+        return False
+
+    all_ok = all(_unlock_single_page(course, student, gate) for gate in gates)
+    if not all_ok:
         return False
 
     moment.page_unlocked_at = timezone.now()
     moment.save(update_fields=["page_unlocked_at"])
-    logger.info("Canvas pages: %s desbloqueó %s", enrollment, gate.canvas_page_url)
     return True
 
 
