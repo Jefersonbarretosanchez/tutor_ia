@@ -27,29 +27,32 @@
       padding: 0 .25rem;
     }
     .nav-item {
+      box-sizing: border-box;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: .4rem;
-      min-width: 2.75rem;
-      min-height: 2.75rem;
-      padding: .5rem .7rem;
+      height: 2.5rem;
+      padding: 0 1rem;
       border-radius: 9999px;
       font-size: .8rem;
       font-weight: 600;
       white-space: nowrap;
       text-decoration: none;
-      transition: background .15s ease, color .15s ease, padding .15s ease, transform .15s ease, box-shadow .15s ease;
+      transition: background .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
+    }
+    /* Solo-ícono (la flecha "Siguiente") — círculo perfecto: ancho = alto. */
+    .nav-item.arrow-only {
+      width: 2.5rem;
+      padding: 0;
     }
     .nav-item.unlocked {
       color: #56607a; /* aprox. --scal-text-secondary */
       cursor: pointer;
-      transform: scale(1);
     }
     .nav-item.unlocked:hover {
-      background: #503B96;   /* --scal-primary-base, píldora sólida como "Aprende" activo */
+      background: #503B96; /* --scal-primary-base, píldora/círculo sólido como "Aprende" activo */
       color: #ffffff;
-      padding: .5rem .9rem;  /* un poco más ancha al hacer hover */
       transform: scale(1.04);
       box-shadow: 0 2px 8px rgba(80, 59, 150, .35);
     }
@@ -60,9 +63,6 @@
     .lock-badge {
       font-size: .7em;
       margin-left: .1rem;
-    }
-    .arrow-only {
-      padding: .5rem;
     }
   </style>
 </head>
@@ -88,8 +88,7 @@
     </a>
   {% else %}
     <span class="nav-item locked arrow-only" title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
-      <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
-      <i class="fa-solid fa-lock lock-badge" aria-hidden="true"></i>
+      <i class="fa-solid fa-lock" aria-hidden="true"></i>
     </span>
   {% endif %}
 </body>
