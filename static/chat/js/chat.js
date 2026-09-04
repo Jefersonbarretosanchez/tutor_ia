@@ -252,8 +252,6 @@
       autoResizeTextarea();
       submitToClara(text);
     });
-
-    textarea.focus();
   }
 
   function refreshUsageBar(container) {
