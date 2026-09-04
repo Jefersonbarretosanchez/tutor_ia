@@ -39,15 +39,19 @@
       font-weight: 600;
       white-space: nowrap;
       text-decoration: none;
-      transition: background .15s ease, color .15s ease;
+      transition: background .15s ease, color .15s ease, padding .15s ease, transform .15s ease, box-shadow .15s ease;
     }
     .nav-item.unlocked {
       color: #56607a; /* aprox. --scal-text-secondary */
       cursor: pointer;
+      transform: scale(1);
     }
     .nav-item.unlocked:hover {
-      background: #EDEAF5; /* --scal-accent-3 */
-      color: #503B96;      /* --scal-primary-base */
+      background: #503B96;   /* --scal-primary-base, píldora sólida como "Aprende" activo */
+      color: #ffffff;
+      padding: .5rem .9rem;  /* un poco más ancha al hacer hover */
+      transform: scale(1.04);
+      box-shadow: 0 2px 8px rgba(80, 59, 150, .35);
     }
     .nav-item.locked {
       color: #b7bac2;
