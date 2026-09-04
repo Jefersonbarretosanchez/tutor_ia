@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Nav</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    /*
+      Colores tomados de las variables reales del tema Scala
+      (--scal-primary-base / --scal-accent-3, etc.) — no se pueden heredar
+      como var(--...) porque este documento vive en un iframe aparte, así
+      que quedan como hex fijos. El :hover se reconstruyó con esos mismos
+      tokens (DevTools no mostró la regla real, solo el estado base).
+    */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: transparent;
+      font-family: "Lato Extended", "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      gap: .25rem;
+      padding: 0 .25rem;
+    }
+    .nav-item {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .4rem;
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+      padding: .5rem .7rem;
+      border-radius: 9999px;
+      font-size: .8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-decoration: none;
+      transition: background .15s ease, color .15s ease;
+    }
+    .nav-item.unlocked {
+      color: #56607a; /* aprox. --scal-text-secondary */
+      cursor: pointer;
+    }
+    .nav-item.unlocked:hover {
+      background: #EDEAF5; /* --scal-accent-3 */
+      color: #503B96;      /* --scal-primary-base */
+    }
+    .nav-item.locked {
+      color: #b7bac2;
+      cursor: not-allowed;
+    }
+    .lock-badge {
+      font-size: .7em;
+      margin-left: .1rem;
+    }
+    .arrow-only {
+      padding: .5rem;
+    }
+  </style>
+</head>
+<body>
+  {% for btn in buttons %}
+    {% if unlocked %}
+      <a class="nav-item unlocked" href="{{ btn.destino }}" target="_top">
+        <i class="fa-solid fa-{{ btn.icon }}" aria-hidden="true"></i>
+        {% if btn.label %}<span>{{ btn.label }}</span>{% endif %}
+      </a>
+    {% else %}
+      <span class="nav-item locked" title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
+        <i class="fa-solid fa-{{ btn.icon }}" aria-hidden="true"></i>
+        {% if btn.label %}<span>{{ btn.label }}</span>{% endif %}
+        <i class="fa-solid fa-lock lock-badge" aria-hidden="true"></i>
+      </span>
+    {% endif %}
+  {% endfor %}
+
+  {% if unlocked %}
+    <a class="nav-item unlocked arrow-only" href="{{ siguiente_destino }}" target="_top" title="Siguiente">
+      <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+    </a>
+  {% else %}
+    <span class="nav-item locked arrow-only" title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
+      <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+      <i class="fa-solid fa-lock lock-badge" aria-hidden="true"></i>
+    </span>
+  {% endif %}
+</body>
+</html>

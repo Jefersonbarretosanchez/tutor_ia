@@ -111,6 +111,20 @@ class CoursePageGate(models.Model):
             "/courses/:id/pages/<esto>, p. ej. 'unidad-1-profundiza'."
         ),
     )
+    label = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Texto del botón en la franja de nav (ver gate_nav.html) — vacío para un ícono solo.",
+    )
+    icon = models.CharField(
+        max_length=50,
+        default="lock",
+        help_text="Nombre del ícono Font Awesome solid, p. ej. 'layer-group', 'pen-to-square', 'comments'.",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Orden de aparición en la franja del nav (menor primero).",
+    )
     locked_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -121,6 +135,7 @@ class CoursePageGate(models.Model):
 
     class Meta:
         unique_together = [("course", "momento", "canvas_page_url")]
+        ordering = ["order", "id"]
 
     def __str__(self):
         return f"{self.course} · {self.momento} → {self.canvas_page_url}"

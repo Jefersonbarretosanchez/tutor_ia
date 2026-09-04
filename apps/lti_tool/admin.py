@@ -27,9 +27,10 @@ class CourseAdmin(admin.ModelAdmin):
 
 @admin.register(CoursePageGate)
 class CoursePageGateAdmin(admin.ModelAdmin):
-    list_display = ("course", "momento", "canvas_page_url", "locked_at")
+    list_display = ("course", "momento", "order", "label", "icon", "canvas_page_url", "locked_at")
     list_filter = ("course",)
-    search_fields = ("canvas_page_url", "momento")
+    search_fields = ("canvas_page_url", "momento", "label")
+    ordering = ("course", "momento", "order")
     actions = ["bloquear_pagina_ahora"]
 
     @admin.action(description="Bloquear página ahora (only_visible_to_overrides)")

@@ -159,11 +159,38 @@ def launch(request):
         validated=True,
     )
 
-    if request.GET.get("gate"):
-        # Botón de nav gateado (ver templates/lti_tool/gate_button.html): un
-        # iframe pequeño que dispara este mismo lanzamiento LTI y dibuja un
-        # botón de 2 estados según ClaraMoment.puede_avanzar — no es una
-        # sesión de chat, así que no arma launch_token ni toca token_ledger.
+    gate_mode = request.GET.get("gate")
+
+    if gate_mode == "nav":
+        # Franja completa del nav gateado en un solo iframe/lanzamiento (ver
+        # templates/lti_tool/gate_nav.html) — evita que cada botón dispare su
+        # propio lanzamiento LTI (y su propio "Loading" de Canvas) por
+        # separado. No es una sesión de chat: no arma launch_token ni toca
+        # token_ledger.
+        gates = list(course.page_gates.filter(momento=momento))
+        moment = ClaraMoment.objects.filter(enrollment=enrollment, momento=momento).first()
+        unlocked = bool(moment and moment.puede_avanzar)
+
+        buttons = []
+        for gate_cfg in gates:
+            destino = None
+            if unlocked:
+                destino = f"{settings.CANVAS_API_BASE_URL}/courses/{course.canvas_course_id}/pages/{gate_cfg.canvas_page_url}"
+            buttons.append({"label": gate_cfg.label, "icon": gate_cfg.icon, "destino": destino})
+
+        siguiente_destino = buttons[0]["destino"] if buttons else None
+
+        return render(
+            request,
+            "lti_tool/gate_nav.html",
+            {"unlocked": unlocked, "buttons": buttons, "siguiente_destino": siguiente_destino},
+        )
+
+    if gate_mode:
+        # Botón individual gateado (ver templates/lti_tool/gate_button.html):
+        # un iframe pequeño que dispara este mismo lanzamiento LTI y dibuja
+        # un botón de 2 estados según ClaraMoment.puede_avanzar. Tampoco es
+        # una sesión de chat.
         label = request.GET.get("label", "")
         icon = request.GET.get("icon", "lock")
         target = request.GET.get("target", "")
