@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from apps.chat.services import canvas_pages
 
-from .models import Course, CourseEnrollment, CoursePageGate, LtiLaunchLog, Student
+from .models import Course, CourseEnrollment, CoursePageGate, DefaultPageGate, LtiLaunchLog, Student
 
 
 @admin.register(Course)
@@ -37,6 +37,14 @@ class CoursePageGateAdmin(admin.ModelAdmin):
     def bloquear_pagina_ahora(self, request, queryset):
         ok = sum(1 for gate in queryset if canvas_pages.lock_page(gate))
         self.message_user(request, f"{ok}/{queryset.count()} página(s) bloqueada(s) correctamente.")
+
+
+@admin.register(DefaultPageGate)
+class DefaultPageGateAdmin(admin.ModelAdmin):
+    list_display = ("momento", "order", "label", "icon", "canvas_page_url")
+    list_filter = ("momento",)
+    search_fields = ("canvas_page_url", "momento", "label")
+    ordering = ("momento", "order")
 
 
 @admin.register(Student)

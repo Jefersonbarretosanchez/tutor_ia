@@ -9,7 +9,7 @@ from pylti1p3.exception import LtiException
 
 from apps.chat.auth import encode_launch_token
 from apps.chat.models import ClaraMoment
-from apps.chat.services import token_ledger
+from apps.chat.services import canvas_pages, token_ledger
 from apps.lti_tool.lti_config import (
     extract_course_fields,
     extract_enrollment_fields,
@@ -19,7 +19,7 @@ from apps.lti_tool.lti_config import (
     get_tool_conf,
     is_instructor,
 )
-from apps.lti_tool.models import Course, CourseEnrollment, LtiLaunchLog, Student
+from apps.lti_tool.models import Course, CourseEnrollment, CoursePageGate, DefaultPageGate, LtiLaunchLog, Student
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,33 @@ def _client_ip(request):
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR")
+
+
+def _provision_default_page_gates(course):
+    """
+    Al detectar un curso por primera vez, copia la plantilla global
+    (DefaultPageGate) como CoursePageGate de este curso para cada `momento`
+    que todavía no tenga gates propios, y bloquea esas páginas de una vez
+    en Canvas (mejor esfuerzo — un fallo queda logueado, se puede reintentar
+    con la acción "Bloquear página ahora" de /admin/).
+    """
+    momentos = DefaultPageGate.objects.values_list("momento", flat=True).distinct()
+    for momento in momentos:
+        if course.page_gates.filter(momento=momento).exists():
+            # Ya tiene gates propios para este momento (asignados a mano
+            # antes del primer lanzamiento) — no se pisan con la plantilla.
+            continue
+
+        for default in DefaultPageGate.objects.filter(momento=momento):
+            gate = CoursePageGate.objects.create(
+                course=course,
+                momento=default.momento,
+                canvas_page_url=default.canvas_page_url,
+                label=default.label,
+                icon=default.icon,
+                order=default.order,
+            )
+            canvas_pages.lock_page(gate)
 
 
 @csrf_exempt
@@ -116,7 +143,7 @@ def launch(request):
 
     lti_tool_row = LtiTool.objects.get(issuer=launch_data.get("iss"), client_id=launch_data.get("aud"))
 
-    course, _ = Course.objects.update_or_create(
+    course, course_created = Course.objects.update_or_create(
         lti_tool=lti_tool_row,
         deployment_id=course_fields["deployment_id"],
         context_id=course_fields["context_id"],
@@ -127,6 +154,9 @@ def launch(request):
             "ags_scope": course_fields["ags_scope"],
         },
     )
+
+    if course_created:
+        _provision_default_page_gates(course)
 
     student, _ = Student.objects.update_or_create(
         lti_tool=lti_tool_row,

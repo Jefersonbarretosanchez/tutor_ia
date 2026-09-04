@@ -89,6 +89,37 @@ class Course(models.Model):
         return self.token_limit or settings.DEFAULT_COURSE_TOKEN_LIMIT
 
 
+class DefaultPageGate(models.Model):
+    """
+    Plantilla global (no pertenece a ningún curso) de qué páginas gatear por
+    `momento`. Al detectar un curso por primera vez (ver `launch()` en
+    apps.lti_tool.views), estas filas se copian como `CoursePageGate` de ese
+    curso para cada `momento` que todavía no tenga gates propios — y esas
+    copias se bloquean de una vez en Canvas — así un curso nuevo arranca
+    protegido sin configuración manual, salvo que alguien ya le haya
+    asignado gates distintos a mano antes de su primer lanzamiento.
+    """
+
+    momento = models.CharField(
+        max_length=20,
+        help_text="Mismo valor que apps.chat.models.ClaraMoment.MOMENTO_CHOICES (p. ej. 'unidad_1').",
+    )
+    canvas_page_url = models.CharField(
+        max_length=255,
+        help_text="Slug de la página a desbloquear en cualquier curso nuevo, p. ej. 'unidad-1-profundiza'.",
+    )
+    label = models.CharField(max_length=50, blank=True)
+    icon = models.CharField(max_length=50, default="lock")
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = [("momento", "canvas_page_url")]
+        ordering = ["momento", "order", "id"]
+
+    def __str__(self):
+        return f"[default] {self.momento} → {self.canvas_page_url}"
+
+
 class CoursePageGate(models.Model):
     """
     Qué página de Canvas desbloquear (vía "Asignar acceso" / date_details)
