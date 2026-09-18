@@ -67,8 +67,18 @@
     container.insertBefore(notice, beforeEl);
   }
 
+  function loadingSkeletonHtml() {
+    return `
+      <div class="lti-chat-skeleton" aria-hidden="true">
+        <div class="lti-chat-skeleton-bubble"></div>
+        <div class="lti-chat-skeleton-bubble lti-chat-skeleton-bubble--user"></div>
+        <div class="lti-chat-skeleton-bubble"></div>
+      </div>
+    `;
+  }
+
   async function boot() {
-    root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-body" id="lti-chat-body"><p class="lti-chat-loading">Cargando…</p></div></div>`;
+    root.innerHTML = `<div class="lti-chat-shell"><div class="lti-chat-body" id="lti-chat-body">${loadingSkeletonHtml()}</div></div>`;
     const body = document.getElementById("lti-chat-body");
 
     if (usage.blocked) {
@@ -82,7 +92,16 @@
     try {
       moment = await api(`clara/moment/?momento=${encodeURIComponent(momento)}`, { method: "GET" });
     } catch (err) {
-      body.innerHTML = `<p class="lti-chat-error">No se pudo abrir el chat: ${err.message}</p>`;
+      body.innerHTML = "";
+      const errorMsg = document.createElement("p");
+      errorMsg.className = "lti-chat-error";
+      errorMsg.textContent = "No se pudo abrir el chat: " + err.message;
+      const retryBtn = document.createElement("button");
+      retryBtn.type = "button";
+      retryBtn.className = "lti-chat-retry";
+      retryBtn.textContent = "Reintentar";
+      retryBtn.addEventListener("click", boot);
+      body.append(errorMsg, retryBtn);
       return;
     }
 
@@ -102,24 +121,102 @@
       renderCompletedNotice(body, progress);
     }
 
+    const logWrap = document.createElement("div");
+    logWrap.className = "lti-chat-log-wrap";
+
     const log = document.createElement("div");
     log.className = "lti-chat-log";
-    body.appendChild(log);
+    log.setAttribute("role", "log");
+    log.setAttribute("aria-live", "polite");
+    log.setAttribute("aria-relevant", "additions");
+    log.setAttribute("aria-label", "Historial de la conversación");
+    log.setAttribute("tabindex", "0");
+
+    const shadowTop = document.createElement("div");
+    shadowTop.className = "lti-chat-scroll-shadow lti-chat-scroll-shadow--top";
+    const shadowBottom = document.createElement("div");
+    shadowBottom.className = "lti-chat-scroll-shadow lti-chat-scroll-shadow--bottom";
+
+    const jumpBtn = document.createElement("button");
+    jumpBtn.type = "button";
+    jumpBtn.className = "lti-chat-jump-btn";
+    jumpBtn.setAttribute("aria-label", "Ir al final de la conversación");
+    jumpBtn.innerHTML = `<span>Ir al final</span><span class="lti-chat-jump-badge" hidden></span>`;
+    const jumpBadge = jumpBtn.querySelector(".lti-chat-jump-badge");
+
+    const srStatus = document.createElement("div");
+    srStatus.className = "lti-chat-sr-only";
+    srStatus.setAttribute("aria-live", "polite");
+
+    logWrap.append(log, shadowTop, shadowBottom, jumpBtn, srStatus);
+    body.appendChild(logWrap);
 
     const form = document.createElement("form");
     form.className = "lti-chat-form";
     form.innerHTML = `
       <div class="lti-chat-input-wrap">
-        <textarea class="lti-chat-input" placeholder="Escribe tu respuesta al tutor IA…" rows="1"></textarea>
+        <textarea class="lti-chat-input" placeholder="Escribe tu respuesta al tutor IA…" aria-label="Mensaje para el tutor IA" rows="1"></textarea>
         <button type="submit" class="lti-chat-send" aria-label="Enviar">${SEND_ICON}</button>
       </div>
     `;
     body.appendChild(form);
 
+    const hint = document.createElement("p");
+    hint.className = "lti-chat-hint";
+    hint.textContent = "Enter para enviar · Shift + Enter para salto de línea";
+    body.appendChild(hint);
+
     const textarea = form.querySelector("textarea");
     const sendBtn = form.querySelector("button");
 
-    function appendBubble(role, text) {
+    const NEAR_BOTTOM_PX = 96;
+    let unreadCount = 0;
+    let emptyStateEl = null;
+
+    function isNearBottom() {
+      return log.scrollHeight - log.scrollTop - log.clientHeight < NEAR_BOTTOM_PX;
+    }
+
+    function scrollLogToBottom(smooth) {
+      log.scrollTo({ top: log.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    }
+
+    function updateScrollAffordances() {
+      const scrollable = log.scrollHeight > log.clientHeight + 1;
+      const nearBottom = isNearBottom();
+      shadowTop.classList.toggle("is-visible", scrollable && log.scrollTop > 4);
+      shadowBottom.classList.toggle("is-visible", scrollable && !nearBottom);
+      jumpBtn.classList.toggle("is-visible", scrollable && !nearBottom);
+      if (nearBottom && unreadCount) {
+        unreadCount = 0;
+        jumpBadge.hidden = true;
+      }
+    }
+
+    log.addEventListener("scroll", updateScrollAffordances);
+    window.addEventListener("resize", updateScrollAffordances);
+    jumpBtn.addEventListener("click", () => {
+      scrollLogToBottom(true);
+      unreadCount = 0;
+      jumpBadge.hidden = true;
+      jumpBtn.classList.remove("is-visible");
+    });
+
+    function showEmptyState() {
+      emptyStateEl = document.createElement("div");
+      emptyStateEl.className = "lti-chat-empty";
+      emptyStateEl.textContent = "Escribe tu primer mensaje para comenzar la conversación con el tutor IA.";
+      log.appendChild(emptyStateEl);
+    }
+
+    function clearEmptyState() {
+      if (emptyStateEl) {
+        emptyStateEl.remove();
+        emptyStateEl = null;
+      }
+    }
+
+    function appendBubbleSilent(role, text) {
       const bubble = document.createElement("div");
       bubble.className = "lti-chat-bubble lti-chat-bubble--" + role;
       if (role === "assistant") {
@@ -128,20 +225,40 @@
         bubble.textContent = text;
       }
       log.appendChild(bubble);
-      log.scrollTop = log.scrollHeight;
+      return bubble;
+    }
+
+    function appendBubble(role, text) {
+      clearEmptyState();
+      const wasNearBottom = isNearBottom();
+      const bubble = appendBubbleSilent(role, text);
+      if (wasNearBottom || role === "user") {
+        scrollLogToBottom(true);
+      } else {
+        unreadCount += 1;
+        jumpBadge.hidden = false;
+        jumpBadge.textContent = String(unreadCount);
+      }
+      updateScrollAffordances();
       return bubble;
     }
 
     function appendTypingBubble() {
+      const wasNearBottom = isNearBottom();
       const bubble = document.createElement("div");
       bubble.className = "lti-chat-bubble lti-chat-bubble--assistant";
+      bubble.setAttribute("aria-hidden", "true");
       bubble.innerHTML = '<span class="lti-chat-typing"><span></span><span></span><span></span></span>';
       log.appendChild(bubble);
-      log.scrollTop = log.scrollHeight;
+      srStatus.textContent = "El tutor está escribiendo…";
+      if (wasNearBottom) scrollLogToBottom(true);
+      updateScrollAffordances();
       return bubble;
     }
 
     function appendErrorBubble(message, onRetry) {
+      clearEmptyState();
+      const wasNearBottom = isNearBottom();
       const bubble = document.createElement("div");
       bubble.className = "lti-chat-bubble lti-chat-bubble--assistant lti-chat-bubble--error";
 
@@ -155,18 +272,24 @@
       retryBtn.textContent = "Reintentar";
       retryBtn.addEventListener("click", () => {
         bubble.remove();
+        updateScrollAffordances();
         onRetry();
       });
       bubble.appendChild(retryBtn);
 
       log.appendChild(bubble);
-      log.scrollTop = log.scrollHeight;
+      if (wasNearBottom) scrollLogToBottom(true);
+      updateScrollAffordances();
       return bubble;
+    }
+
+    function updateSendState() {
+      sendBtn.disabled = textarea.disabled || textarea.value.trim().length === 0;
     }
 
     function lockInput(locked) {
       textarea.disabled = locked;
-      sendBtn.disabled = locked;
+      updateSendState();
     }
 
     function updateMomentProgress(pct, tokensUsados, presupuesto) {
@@ -187,10 +310,24 @@
       textarea.style.height = textarea.scrollHeight + "px";
     }
 
-    moment.messages.forEach((msg) => appendBubble(msg.role, msg.content));
+    if (moment.messages.length) {
+      moment.messages.forEach((msg) => appendBubbleSilent(msg.role, msg.content));
+    } else {
+      showEmptyState();
+    }
     updateMomentProgress(moment.porcentaje_usado, moment.tokens_used, moment.presupuesto);
+    updateSendState();
 
-    textarea.addEventListener("input", autoResizeTextarea);
+    requestAnimationFrame(() => {
+      log.scrollTop = log.scrollHeight;
+      updateScrollAffordances();
+      if (!textarea.disabled) textarea.focus({ preventScroll: true });
+    });
+
+    textarea.addEventListener("input", () => {
+      autoResizeTextarea();
+      updateSendState();
+    });
 
     textarea.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -209,6 +346,7 @@
           body: JSON.stringify({ momento, message: text }),
         });
         thinking.remove();
+        srStatus.textContent = "";
         appendBubble("assistant", data.message.content);
         usage = data.usage;
         refreshUsageBar(body);
@@ -227,6 +365,7 @@
         }
       } catch (err) {
         thinking.remove();
+        srStatus.textContent = "";
         if (err.status === 403 && err.payload && err.payload.usage) {
           usage = err.payload.usage;
           refreshUsageBar(body);
@@ -250,6 +389,7 @@
       appendBubble("user", text);
       textarea.value = "";
       autoResizeTextarea();
+      updateSendState();
       submitToClara(text);
     });
   }
