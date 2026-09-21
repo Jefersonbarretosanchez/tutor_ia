@@ -7,12 +7,30 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <style>
     /*
-      Colores tomados de las variables reales del tema Scala
-      (--scal-primary-base / --scal-accent-3, etc.) — no se pueden heredar
-      como var(--...) porque este documento vive en un iframe aparte, así
-      que quedan como hex fijos. El :hover se reconstruyó con esos mismos
-      tokens (DevTools no mostró la regla real, solo el estado base).
+      Este documento vive en un iframe aparte del de Canvas: var(--aula-*)
+      de aulaideal-base-desktop.css no cruza el límite del documento, así
+      que --aula-primary-base/--aula-secondary-base y las fórmulas
+      color-mix() que dependen de ellas se copian aquí tal cual están en
+      ese archivo. Si el tema cambia esos dos valores base, hay que traer
+      el cambio aquí a mano — no hay otra forma de compartirlos.
+      El resto de la clase .aula-menu-item (tamaño, radio, tooltip) es una
+      réplica 1:1 de la regla real, para que este ítem se lea como parte
+      de la misma franja aunque viva en otro documento.
     */
+    :root {
+      --aula-primary-base: #303651;
+      --aula-secondary-base: #F8B716;
+      --aula-neutral-400: color-mix(in oklch, var(--aula-secondary-base) 2%, color-mix(in oklch, black 40%, white));
+      --aula-neutral-600: color-mix(in oklch, var(--aula-secondary-base) 2%, color-mix(in oklch, black 68%, white));
+      --aula-text-secondary: var(--aula-neutral-600);
+      --aula-radius-sm: 0.5rem;
+      --aula-space-sm: 0.5rem;
+      --aula-text-xs: 0.8rem;
+      --aula-text-2xs: 0.7rem;
+      --aula-touch-target: 2.75rem;
+      --aula-transition-fast: 0.15s ease;
+      --aula-shadow-hard: 0 8px 16px -4px color-mix(in oklch, black 25%, transparent);
+    }
     html, body {
       margin: 0;
       padding: 0;
@@ -23,58 +41,94 @@
     body {
       display: flex;
       align-items: center;
-      gap: .25rem;
+      gap: .15rem;
       padding: 0 .25rem;
     }
-    .nav-item {
+    /* Réplica de .aula-menu-item (aulaideal-base-desktop.css). */
+    .aula-menu-item {
       box-sizing: border-box;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: .4rem;
-      height: 2.5rem;
-      padding: 0 1rem;
-      border-radius: 9999px;
-      font-size: .8rem;
+      gap: var(--aula-space-sm);
+      min-width: 2.25rem;
+      min-height: var(--aula-touch-target);
+      padding: 0.4rem 0.55rem;
+      border-radius: var(--aula-radius-sm);
+      font-size: var(--aula-text-xs);
       font-weight: 600;
-      white-space: nowrap;
+      color: var(--aula-text-secondary);
       text-decoration: none;
-      transition: background .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
+      white-space: nowrap;
+      transition: background var(--aula-transition-fast), color var(--aula-transition-fast);
     }
-    /* Solo-ícono (la flecha "Siguiente") — círculo perfecto: ancho = alto. */
-    .nav-item.arrow-only {
-      width: 2.5rem;
-      padding: 0;
+    .aula-menu-item i { font-size: 1.125em; }
+    .aula-menu-item.unlocked { cursor: pointer; }
+    /* Ítem actual: mismo par que .aula-menu-item[data-current] del tema. */
+    .aula-menu-item[data-current] {
+      background: var(--aula-secondary-base);
+      color: var(--aula-primary-base);
+      cursor: default;
     }
-    .nav-item.unlocked {
-      color: color-mix(in oklch, #F8B716 2%, color-mix(in oklch, black 68%, white)); /* --scal-text-secondary real */
-      cursor: pointer;
-    }
-    .nav-item.unlocked:hover {
-      background: #503B96; /* --scal-primary-base, píldora/círculo sólido como "Aprende" activo */
+    .aula-menu-item.unlocked:hover,
+    .aula-menu-item.unlocked:focus-visible {
+      background: var(--aula-primary-base);
       color: #ffffff;
-      transform: scale(1.04);
-      box-shadow: 0 2px 8px rgba(80, 59, 150, .35);
+      outline: none;
     }
-    .nav-item.locked {
-      color: #b7bac2;
+    .aula-menu-item.locked {
+      color: var(--aula-neutral-400);
       cursor: not-allowed;
     }
-    .lock-badge {
-      font-size: .7em;
-      margin-left: .1rem;
+    .lock-badge { font-size: .7em; margin-left: .1rem; }
+    /* Tooltip para ítems sin etiqueta visible (la flecha "Siguiente"),
+       mismo mecanismo que el nav real: @media (hover: hover) + attr(aria-label). */
+    @media (hover: hover) {
+      .aula-menu-item:not(:has(span)) { position: relative; }
+      .aula-menu-item:not(:has(span))::after {
+        content: attr(aria-label);
+        position: absolute;
+        bottom: calc(100% + 0.4rem);
+        left: 50%;
+        translate: -50% 0.25rem;
+        z-index: 1;
+        padding: 0.3rem 0.55rem;
+        border-radius: var(--aula-radius-sm);
+        background: var(--aula-primary-base);
+        color: #ffffff;
+        box-shadow: var(--aula-shadow-hard);
+        font-size: var(--aula-text-2xs);
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity var(--aula-transition-fast), translate var(--aula-transition-fast), visibility var(--aula-transition-fast);
+      }
+      .aula-menu-item:not(:has(span)):hover::after,
+      .aula-menu-item:not(:has(span)):focus-visible::after {
+        opacity: 1;
+        visibility: visible;
+        translate: -50% 0;
+      }
     }
   </style>
 </head>
 <body>
   {% for btn in buttons %}
-    {% if unlocked %}
-      <a class="nav-item unlocked" href="{{ btn.destino }}" target="_top">
+    {% if btn.current %}
+      <span class="aula-menu-item" data-current="page" aria-current="page">
+        <i class="fa-solid fa-{{ btn.icon }}" aria-hidden="true"></i>
+        {% if btn.label %}<span>{{ btn.label }}</span>{% endif %}
+      </span>
+    {% elif unlocked %}
+      <a class="aula-menu-item unlocked" href="{{ btn.destino }}" target="_top" aria-label="Ir a {{ btn.label }}">
         <i class="fa-solid fa-{{ btn.icon }}" aria-hidden="true"></i>
         {% if btn.label %}<span>{{ btn.label }}</span>{% endif %}
       </a>
     {% else %}
-      <span class="nav-item locked" title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
+      <span class="aula-menu-item locked" aria-label="Completa la actividad de 'Aprende' con Clara para desbloquear esto." title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
         <i class="fa-solid fa-{{ btn.icon }}" aria-hidden="true"></i>
         {% if btn.label %}<span>{{ btn.label }}</span>{% endif %}
         <i class="fa-solid fa-lock lock-badge" aria-hidden="true"></i>
@@ -82,12 +136,16 @@
     {% endif %}
   {% endfor %}
 
-  {% if unlocked %}
-    <a class="nav-item unlocked arrow-only" href="{{ siguiente_destino }}" target="_top" title="Siguiente">
+  {% if unlocked and siguiente_destino %}
+    <a class="aula-menu-item unlocked" href="{{ siguiente_destino }}" target="_top" aria-label="Siguiente">
       <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
     </a>
+  {% elif unlocked %}
+    <span class="aula-menu-item locked" aria-label="No hay más contenido después de esto." title="No hay más contenido después de esto.">
+      <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+    </span>
   {% else %}
-    <span class="nav-item locked arrow-only" title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
+    <span class="aula-menu-item locked" aria-label="Completa la actividad de 'Aprende' con Clara para desbloquear esto." title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
       <i class="fa-solid fa-lock" aria-hidden="true"></i>
     </span>
   {% endif %}

@@ -7,11 +7,25 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <style>
     /*
-      Colores/espaciados son un punto de partida — se piensa para vivir
-      dentro de un iframe pequeño embebido en el nav de la página de
-      Canvas (scala-anchornav), así que hay que afinarlos a mano contra
-      ese diseño una vez montado.
+      Mismo mecanismo que templates/lti_tool/gate_nav.html: este documento
+      vive en un iframe aparte del de Canvas, así que no puede heredar
+      var(--aula-*) de aulaideal-base-desktop.css. Los tokens de abajo son
+      copia literal de las fórmulas de ese archivo — si el tema cambia
+      --aula-primary-base/--aula-secondary-base, hay que traer el cambio
+      aquí a mano también.
     */
+    :root {
+      --aula-primary-base: #303651;
+      --aula-secondary-base: #F8B716;
+      --aula-neutral-400: color-mix(in oklch, var(--aula-secondary-base) 2%, color-mix(in oklch, black 40%, white));
+      --aula-neutral-600: color-mix(in oklch, var(--aula-secondary-base) 2%, color-mix(in oklch, black 68%, white));
+      --aula-text-secondary: var(--aula-neutral-600);
+      --aula-radius-sm: 0.5rem;
+      --aula-space-sm: 0.5rem;
+      --aula-text-xs: 0.8rem;
+      --aula-touch-target: 2.75rem;
+      --aula-transition-fast: 0.15s ease;
+    }
     html, body {
       margin: 0;
       padding: 0;
@@ -24,38 +38,47 @@
       align-items: center;
       justify-content: center;
     }
-    .nav-item {
+    /* Réplica de .aula-menu-item (aulaideal-base-desktop.css). */
+    .aula-menu-item {
+      box-sizing: border-box;
       display: inline-flex;
       align-items: center;
-      gap: .4rem;
-      padding: .4rem .7rem;
-      border-radius: 8px;
+      justify-content: center;
+      gap: var(--aula-space-sm);
+      min-width: 2.25rem;
+      min-height: var(--aula-touch-target);
+      padding: 0.4rem 0.55rem;
+      border-radius: var(--aula-radius-sm);
+      font-size: var(--aula-text-xs);
+      font-weight: 600;
+      color: var(--aula-text-secondary);
       text-decoration: none;
-      font-size: .85rem;
       white-space: nowrap;
+      transition: background var(--aula-transition-fast), color var(--aula-transition-fast);
     }
-    .nav-item.unlocked {
-      color: #171b23;
-      cursor: pointer;
+    .aula-menu-item i { font-size: 1.125em; }
+    .aula-menu-item.unlocked { cursor: pointer; }
+    .aula-menu-item.unlocked:hover,
+    .aula-menu-item.unlocked:focus-visible {
+      background: var(--aula-primary-base);
+      color: #ffffff;
+      outline: none;
     }
-    .nav-item.locked {
-      color: #9aa1a9;
+    .aula-menu-item.locked {
+      color: var(--aula-neutral-400);
       cursor: not-allowed;
     }
-    .lock-badge {
-      font-size: .7em;
-      margin-left: .15rem;
-    }
+    .lock-badge { font-size: .7em; margin-left: .15rem; }
   </style>
 </head>
 <body>
   {% if unlocked %}
-    <a class="nav-item unlocked" href="{{ destino }}" target="_top">
+    <a class="aula-menu-item unlocked" href="{{ destino }}" target="_top" aria-label="Ir a {{ label }}">
       <i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>
       {% if label %}<span>{{ label }}</span>{% endif %}
     </a>
   {% else %}
-    <span class="nav-item locked" title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
+    <span class="aula-menu-item locked" aria-label="Completa la actividad de 'Aprende' con Clara para desbloquear esto." title="Completa la actividad de 'Aprende' con Clara para desbloquear esto.">
       <i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>
       {% if label %}<span>{{ label }}</span>{% endif %}
       <i class="fa-solid fa-lock lock-badge" aria-hidden="true"></i>

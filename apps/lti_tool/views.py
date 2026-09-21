@@ -197,18 +197,42 @@ def launch(request):
         # propio lanzamiento LTI (y su propio "Loading" de Canvas) por
         # separado. No es una sesión de chat: no arma launch_token ni toca
         # token_ledger.
+        #
+        # `pagina_actual` es el slug de la página de Canvas donde vive este
+        # iframe (lo manda la URL de lanzamiento configurada en esa página,
+        # p. ej. ?pagina_actual=unidad-1-profundiza) — permite marcar ese
+        # botón como el actual (sin link, ver gate_nav.html) y apuntar
+        # "Siguiente" al que sigue en `order`, no siempre al primero.
+        pagina_actual = request.GET.get("pagina_actual", "").strip()
         gates = list(course.page_gates.filter(momento=momento))
         moment = ClaraMoment.objects.filter(enrollment=enrollment, momento=momento).first()
         unlocked = bool(moment and moment.puede_avanzar)
 
         buttons = []
-        for gate_cfg in gates:
+        current_index = None
+        for index, gate_cfg in enumerate(gates):
+            is_current = bool(pagina_actual) and gate_cfg.canvas_page_url == pagina_actual
+            if is_current:
+                current_index = index
             destino = None
-            if unlocked:
+            if unlocked and not is_current:
                 destino = f"{settings.CANVAS_API_BASE_URL}/courses/{course.canvas_course_id}/pages/{gate_cfg.canvas_page_url}"
-            buttons.append({"label": gate_cfg.label, "icon": gate_cfg.icon, "destino": destino})
+            buttons.append(
+                {"label": gate_cfg.label, "icon": gate_cfg.icon, "destino": destino, "current": is_current}
+            )
 
-        siguiente_destino = buttons[0]["destino"] if buttons else None
+        if current_index is not None:
+            siguiente_gate = gates[current_index + 1] if current_index + 1 < len(gates) else None
+        else:
+            # Sin `pagina_actual` (páginas todavía no migradas al nuevo
+            # parámetro): mismo comportamiento de antes, apunta al primero.
+            siguiente_gate = gates[0] if gates else None
+
+        siguiente_destino = None
+        if unlocked and siguiente_gate:
+            siguiente_destino = (
+                f"{settings.CANVAS_API_BASE_URL}/courses/{course.canvas_course_id}/pages/{siguiente_gate.canvas_page_url}"
+            )
 
         return render(
             request,
