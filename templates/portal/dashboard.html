@@ -1,0 +1,17 @@
+{% extends "portal/base.html" %}
+{% block title %}Inicio{% endblock %}
+{% block content %}
+<h2>Resumen</h2>
+<div class="stats">
+  <div class="card stat"><b>{{ courses }}</b><span>Cursos activos</span></div>
+  <div class="card stat"><b>{{ students }}</b><span>Matrículas de estudiantes</span></div>
+  <div class="card stat"><b>{{ blocked }}</b><span>Chats bloqueados</span></div>
+  <div class="card stat"><b>{{ tokens }}</b><span>Tokens netos consumidos</span></div>
+</div>
+{% if can_logs %}
+<h2>Últimos lanzamientos LTI fallidos</h2>
+<table><tr><th>Fecha</th><th>Issuer</th><th>IP</th><th>Error</th></tr>
+{% for l in failed_launches %}<tr><td>{{ l.created_at|date:"Y-m-d H:i" }}</td><td>{{ l.issuer }}</td><td>{{ l.ip_address }}</td><td>{{ l.error|truncatechars:90 }}</td></tr>
+{% empty %}<tr><td colspan="4">Sin fallos recientes.</td></tr>{% endfor %}</table>
+{% endif %}
+{% endblock %}

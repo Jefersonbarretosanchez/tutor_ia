@@ -1,0 +1,14 @@
+<table>
+  <tr><th>Estudiante</th><th>Curso</th><th>Momento</th><th>Avance</th><th>Última actividad</th><th></th></tr>
+  {% for m in page %}
+  <tr>
+    <td>{{ m.enrollment.student.name|default:m.enrollment.student.login_id }}</td>
+    <td>{{ m.enrollment.course }}</td>
+    <td>{{ m.get_momento_display }}</td>
+    <td>{{ m.porcentaje_usado }}%{% if m.puede_avanzar %} <span class="pill ok">Puede avanzar</span>{% endif %}</td>
+    <td>{{ m.last_activity_at|date:"Y-m-d H:i" }}</td>
+    <td class="actions"><a class="btn sec sm" href="{% url 'portal:conversation_detail' m.pk %}">Abrir</a></td>
+  </tr>
+  {% empty %}<tr><td colspan="6">Sin resultados.</td></tr>{% endfor %}
+</table>
+{% include "portal/_pager.html" %}

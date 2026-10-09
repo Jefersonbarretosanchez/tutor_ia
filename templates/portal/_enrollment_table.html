@@ -1,0 +1,6 @@
+<table>
+  <tr><th>Estudiante</th><th>Curso</th><th>Consumo</th><th>Chat</th><th></th></tr>
+  {% for r in rows %}{% include "portal/_enrollment_row.html" %}
+  {% empty %}<tr><td colspan="5">Sin resultados.</td></tr>{% endfor %}
+</table>
+{% include "portal/_pager.html" %}

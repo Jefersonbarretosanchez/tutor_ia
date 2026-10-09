@@ -1,0 +1,17 @@
+{% extends "portal/base.html" %}
+{% block title %}Usuario{% endblock %}
+{% block content %}
+<h2>{% if target %}Editar usuario · {{ target.username }}{% else %}Nuevo usuario{% endif %}</h2>
+<form method="post" class="card" style="max-width:640px" autocomplete="off">{% csrf_token %}
+  {% for e in form.non_field_errors %}<div class="err">{{ e }}</div>{% endfor %}
+  {% for f in form %}
+  <div class="field">
+    <label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}
+    {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}
+    {% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}
+  </div>
+  {% endfor %}
+  <button class="btn">Guardar</button>
+  <a class="btn sec" href="{% url 'portal:user_list' %}">Cancelar</a>
+</form>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ res.label }}{% endblock %}
+{% block content %}
+<div class="bar">
+  <h2 style="margin:0">{{ res.label }}</h2><span class="sp"></span>
+  {% if res.search %}<input type="search" name="q" value="{{ q }}" placeholder="Buscar…" hx-get="{% url 'portal:resource_list' res.key %}" hx-trigger="keyup changed delay:300ms, search" hx-target="#results" hx-push-url="true">{% endif %}
+  {% if can_create %}<a class="btn" href="{% url 'portal:resource_create' res.key %}">+ Nuevo</a>{% endif %}
+</div>
+<div id="results">{% include "portal/_table.html" %}</div>
+{% endblock %}

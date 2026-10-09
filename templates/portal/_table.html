@@ -1,0 +1,20 @@
+<table>
+  <tr>{% for h, _ in res.columns %}<th>{{ h }}</th>{% endfor %}{% if can_edit or can_delete or extra_actions %}<th></th>{% endif %}</tr>
+  {% for row in rows %}
+  <tr>
+    {% for c in row.cells %}<td>{{ c|default_if_none:"—" }}</td>{% endfor %}
+    {% if can_edit or can_delete or extra_actions %}
+    <td class="actions">
+      {% if can_edit %}<a class="btn sec sm" href="{% url 'portal:resource_edit' res.key row.obj.pk %}">Editar</a>{% endif %}
+      {% for perm, urlname, label in extra_actions %}
+      <form method="post" action="{% url urlname row.obj.pk %}" style="display:inline">{% csrf_token %}<button class="btn sec sm">{{ label }}</button></form>
+      {% endfor %}
+      {% if can_delete %}
+      <form method="post" action="{% url 'portal:resource_delete' res.key row.obj.pk %}" style="display:inline" onsubmit="return confirm('¿Eliminar este registro?')">{% csrf_token %}<button class="btn bad sm">Eliminar</button></form>
+      {% endif %}
+    </td>
+    {% endif %}
+  </tr>
+  {% empty %}<tr><td colspan="20">Sin resultados.</td></tr>{% endfor %}
+</table>
+{% include "portal/_pager.html" %}

@@ -1,0 +1,21 @@
+{% extends "portal/base.html" %}
+{% block title %}Roles{% endblock %}
+{% block content %}
+<div class="bar"><h2 style="margin:0">Roles y permisos</h2><span class="sp"></span>
+  {% if can_create %}<a class="btn" href="{% url 'portal:role_create' %}">+ Nuevo rol</a>{% endif %}</div>
+<table>
+  <tr><th>Rol</th><th>Descripción</th><th>Permisos</th><th>Usuarios</th><th></th></tr>
+  {% for r in roles %}
+  <tr>
+    <td>{{ r.role.name }}{% if r.role.is_system %} <span class="pill">Sistema</span>{% endif %}</td>
+    <td>{{ r.role.description }}</td><td>{{ r.perm_count }} / {{ total }}</td><td>{{ r.users }}</td>
+    <td class="actions">
+      <a class="btn sec sm" href="{% url 'portal:role_matrix' r.role.pk %}">Ver matriz</a>
+      {% if can_delete and not r.role.is_system %}
+      <form method="post" action="{% url 'portal:role_delete' r.role.pk %}" style="display:inline" onsubmit="return confirm('¿Eliminar este rol?')">{% csrf_token %}<button class="btn bad sm">Eliminar</button></form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

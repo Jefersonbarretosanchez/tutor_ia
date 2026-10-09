@@ -1,0 +1,10 @@
+{% extends "portal/base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block content %}
+<div class="bar">
+  <h2 style="margin:0">Usuarios</h2><span class="sp"></span>
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar…" hx-get="{% url 'portal:user_list' %}" hx-trigger="keyup changed delay:300ms, search" hx-target="#results" hx-push-url="true">
+  {% if can_create %}<a class="btn" href="{% url 'portal:user_create' %}">+ Nuevo usuario</a>{% endif %}
+</div>
+<div id="results">{% include "portal/_user_table.html" %}</div>
+{% endblock %}

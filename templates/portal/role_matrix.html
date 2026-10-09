@@ -1,0 +1,23 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ role.name }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal:role_list' %}">‹ Roles</a></p>
+<h2>Matriz de permisos · {{ role.name }}</h2>
+{% if locked %}<div class="msg">El rol Super admin tiene todos los permisos y no se puede modificar.</div>{% endif %}
+<form method="post">{% csrf_token %}
+  <table class="matrix">
+    <tr><th>Recurso</th><th colspan="6">Acciones permitidas</th></tr>
+    {% for row in matrix %}
+    <tr>
+      <td>{{ row.label }}</td>
+      <td style="text-align:left" colspan="6">
+        {% for a in row.actions %}
+        <label style="margin-right:16px;white-space:nowrap"><input type="checkbox" name="perm" value="{{ row.key }}:{{ a.code }}" {% if a.checked %}checked{% endif %} {% if not editable %}disabled{% endif %}> {{ a.label }}</label>
+        {% endfor %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% if editable %}<p><button class="btn">Guardar matriz</button></p>{% endif %}
+</form>
+{% endblock %}

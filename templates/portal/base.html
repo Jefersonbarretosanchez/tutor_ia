@@ -1,0 +1,51 @@
+{% load static portal_tags %}<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Portal{% endblock %} · LTI Chat Scala</title>
+  <link rel="stylesheet" href="{% static 'portal/css/portal.css' %}">
+  <script src="{% static 'portal/js/htmx.min.js' %}" defer></script>
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+{% if request.user.is_authenticated %}
+<div class="layout">
+  <nav class="side">
+    <h1>LTI Chat Scala</h1>
+    <a href="{% url 'portal:dashboard' %}">Inicio</a>
+    <div class="grp">Operación</div>
+    {% if request.user|can:"courses.view" %}<a href="{% url 'portal:resource_list' 'courses' %}">Cursos</a>{% endif %}
+    {% if request.user|can:"enrollments.view" %}<a href="{% url 'portal:enrollment_list' %}">Matrículas y tokens</a>{% endif %}
+    {% if request.user|can:"students.view" %}<a href="{% url 'portal:resource_list' 'students' %}">Estudiantes</a>{% endif %}
+    {% if request.user|can:"conversations.view" %}<a href="{% url 'portal:conversation_list' %}">Conversaciones</a>{% endif %}
+    {% if request.user|can:"ledger.view" %}<a href="{% url 'portal:resource_list' 'ledger' %}">Ledger de tokens</a>{% endif %}
+    <div class="grp">Configuración</div>
+    {% if request.user|can:"gates.view" %}<a href="{% url 'portal:resource_list' 'gates' %}">Gates por curso</a>{% endif %}
+    {% if request.user|can:"default_gates.view" %}<a href="{% url 'portal:resource_list' 'default_gates' %}">Gates por defecto</a>{% endif %}
+    {% if request.user|can:"prompts.view" %}<a href="{% url 'portal:resource_list' 'prompts' %}">Plantillas de prompt</a>{% endif %}
+    {% if request.user|can:"flows.view" %}<a href="{% url 'portal:resource_list' 'flows' %}">Flujos n8n</a>{% endif %}
+    <div class="grp">Monitoreo</div>
+    {% if request.user|can:"launch_logs.view" %}<a href="{% url 'portal:resource_list' 'launch_logs' %}">Lanzamientos LTI</a>{% endif %}
+    {% if request.user|can:"audit.view" %}<a href="{% url 'portal:resource_list' 'audit' %}">Auditoría</a>{% endif %}
+    {% if request.user|can:"users.view" or request.user|can:"roles.view" %}<div class="grp">Accesos</div>{% endif %}
+    {% if request.user|can:"users.view" %}<a href="{% url 'portal:user_list' %}">Usuarios</a>{% endif %}
+    {% if request.user|can:"roles.view" %}<a href="{% url 'portal:role_list' %}">Roles y permisos</a>{% endif %}
+  </nav>
+  <div class="main">
+    <div class="top">
+      <span>{{ request.user.get_full_name|default:request.user.username }}
+        {% if request.user.portal_role %}<span class="pill">{{ request.user.portal_role.role.name }}</span>{% endif %}</span>
+      <span><a href="{% url 'portal:password_change' %}">Cambiar contraseña</a> ·
+        <form method="post" action="{% url 'portal:logout' %}">{% csrf_token %}<button class="btn sec sm">Salir</button></form></span>
+    </div>
+    <div class="content">
+      {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% else %}
+  {% block anon %}{% endblock %}
+{% endif %}
+</body>
+</html>

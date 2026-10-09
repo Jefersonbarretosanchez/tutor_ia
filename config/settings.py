@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "pylti1p3.contrib.django.lti1p3_tool_config",
     "apps.lti_tool",
     "apps.chat",
+    "apps.portal",
 ]
 
 MIDDLEWARE = [
@@ -68,6 +69,7 @@ MIDDLEWARE = [
     # (ver LTI_FRAME_ANCESTORS más abajo): la LTI vive embebida en un iframe
     # de Canvas, así que no podemos usar DENY/SAMEORIGIN por defecto.
     "apps.lti_tool.middleware.LtiFrameAncestorsMiddleware",
+    "apps.portal.middleware.ForcePasswordChangeMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -102,9 +104,21 @@ DATABASES = {
     )
 }
 
+# Argon2 es el hasher principal; PBKDF2 queda solo para validar (y migrar al
+# vuelo, en el próximo login) hashes de contraseñas creadas antes del cambio.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
+# Portal de administración (apps.portal) — sesión de usuarios internos.
+LOGIN_URL = "portal:login"
+SESSION_COOKIE_AGE = int(os.environ.get("PORTAL_SESSION_SECONDS", 60 * 60 * 8))
+SESSION_COOKIE_SAMESITE = "Lax"
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]

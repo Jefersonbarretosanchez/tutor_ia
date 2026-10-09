@@ -1,0 +1,21 @@
+<tr id="enr-{{ r.e.pk }}">
+  <td>{{ r.e.student.name|default:r.e.student.login_id }}<div class="help">{{ r.e.student.email }}{% if r.e.is_instructor %} · <span class="pill">Instructor</span>{% endif %}</div></td>
+  <td>{{ r.e.course }}</td>
+  <td>{{ r.used }} / {{ r.limit }}<div class="meter {% if r.pct >= 100 %}hot{% endif %}"><i style="width:{{ r.pct }}%"></i></div></td>
+  <td>{% if r.e.chat_enabled %}<span class="pill ok">Activo</span>{% else %}<span class="pill bad">Bloqueado</span>{% endif %}
+    {% if flash %}<div class="help">{{ flash }}</div>{% endif %}</td>
+  <td class="actions">
+    {% if can_reactivate and not r.e.chat_enabled %}
+    <button class="btn sec sm" hx-post="{% url 'portal:enrollment_reactivate' r.e.pk %}" hx-target="#enr-{{ r.e.pk }}" hx-swap="outerHTML">Reactivar chat</button>
+    {% endif %}
+    {% if can_adjust %}
+    <details {% if open_credit %}open{% endif %} style="display:inline-block;text-align:left">
+      <summary>Acreditar tokens</summary>
+      <form hx-post="{% url 'portal:enrollment_credit' r.e.pk %}" hx-target="#enr-{{ r.e.pk }}" hx-swap="outerHTML" class="card" style="margin-top:6px">
+        {% for f in credit_form %}<div class="field"><label>{{ f.label }}</label>{{ f }}{% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>{% endfor %}
+        <button class="btn sm">Acreditar</button>
+      </form>
+    </details>
+    {% endif %}
+  </td>
+</tr>

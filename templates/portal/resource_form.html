@@ -1,0 +1,17 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ res.label }}{% endblock %}
+{% block content %}
+<h2>{{ res.label }} · {% if obj %}Editar{% else %}Nuevo{% endif %}</h2>
+<form method="post" class="card" style="max-width:640px">{% csrf_token %}
+  {% for e in form.non_field_errors %}<div class="err">{{ e }}</div>{% endfor %}
+  {% for f in form %}
+  <div class="field">
+    <label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}
+    {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}
+    {% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}
+  </div>
+  {% endfor %}
+  <button class="btn">Guardar</button>
+  <a class="btn sec" href="{% url 'portal:resource_list' res.key %}">Cancelar</a>
+</form>
+{% endblock %}
