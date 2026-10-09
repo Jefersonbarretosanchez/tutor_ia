@@ -1,7 +1,9 @@
-{% if page.paginator.num_pages > 1 %}
 <div class="pager">
-  {% if page.has_previous %}<a class="btn sec sm" hx-get="?{{ page.qs }}page={{ page.previous_page_number }}" hx-target="#results" hx-push-url="true">‹ Anterior</a>{% endif %}
-  <span>Página {{ page.number }} de {{ page.paginator.num_pages }} · {{ page.paginator.count }} registros</span>
-  {% if page.has_next %}<a class="btn sec sm" hx-get="?{{ page.qs }}page={{ page.next_page_number }}" hx-target="#results" hx-push-url="true">Siguiente ›</a>{% endif %}
+  <span>{{ page.paginator.count }} registro{{ page.paginator.count|pluralize }}</span>
+  {% if page.paginator.num_pages > 1 %}
+  <span class="sp" style="flex:1"></span>
+  {% if page.has_previous %}<a class="btn sec sm" href="?{{ page.qs }}page={{ page.previous_page_number }}" hx-get="?{{ page.qs }}page={{ page.previous_page_number }}" hx-target="#results" hx-push-url="true">‹ Anterior</a>{% endif %}
+  <span>Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn sec sm" href="?{{ page.qs }}page={{ page.next_page_number }}" hx-get="?{{ page.qs }}page={{ page.next_page_number }}" hx-target="#results" hx-push-url="true">Siguiente ›</a>{% endif %}
+  {% endif %}
 </div>
-{% else %}<div class="pager">{{ page.paginator.count }} registros</div>{% endif %}

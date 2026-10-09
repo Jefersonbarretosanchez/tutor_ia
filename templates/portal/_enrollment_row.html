@@ -1,21 +1,14 @@
 <tr id="enr-{{ r.e.pk }}">
-  <td>{{ r.e.student.name|default:r.e.student.login_id }}<div class="help">{{ r.e.student.email }}{% if r.e.is_instructor %} · <span class="pill">Instructor</span>{% endif %}</div></td>
-  <td>{{ r.e.course }}</td>
-  <td>{{ r.used }} / {{ r.limit }}<div class="meter {% if r.pct >= 100 %}hot{% endif %}"><i style="width:{{ r.pct }}%"></i></div></td>
-  <td>{% if r.e.chat_enabled %}<span class="pill ok">Activo</span>{% else %}<span class="pill bad">Bloqueado</span>{% endif %}
-    {% if flash %}<div class="help">{{ flash }}</div>{% endif %}</td>
-  <td class="actions">
+  <td data-label="Estudiante">{{ r.e.student.name|default:r.e.student.login_id }}<div class="sub">{{ r.e.student.email }}{% if r.e.is_instructor %} · <span class="pill gray">Instructor</span>{% endif %}</div></td>
+  <td data-label="Curso">{{ r.e.course }}</td>
+  <td class="num" data-label="Consumo">{{ r.used }} / {{ r.limit }}<div class="meter{% if r.pct >= 100 %} hot{% elif r.pct >= 80 %} warn{% endif %}"><i style="width:{{ r.pct }}%"></i></div></td>
+  <td data-label="Chat">{% if r.e.chat_enabled %}<span class="pill ok">Activo</span>{% else %}<span class="pill bad">Bloqueado</span>{% endif %}
+    {% if flash %}<div class="sub" role="status">{{ flash }}</div>{% endif %}</td>
+  <td class="cell-actions" data-label="">
     {% if can_reactivate and not r.e.chat_enabled %}
     <button class="btn sec sm" hx-post="{% url 'portal:enrollment_reactivate' r.e.pk %}" hx-target="#enr-{{ r.e.pk }}" hx-swap="outerHTML">Reactivar chat</button>
     {% endif %}
-    {% if can_adjust %}
-    <details {% if open_credit %}open{% endif %} style="display:inline-block;text-align:left">
-      <summary>Acreditar tokens</summary>
-      <form hx-post="{% url 'portal:enrollment_credit' r.e.pk %}" hx-target="#enr-{{ r.e.pk }}" hx-swap="outerHTML" class="card" style="margin-top:6px">
-        {% for f in credit_form %}<div class="field"><label>{{ f.label }}</label>{{ f }}{% for e in f.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>{% endfor %}
-        <button class="btn sm">Acreditar</button>
-      </form>
-    </details>
-    {% endif %}
+    {% if can_adjust %}<a class="btn sec sm" href="{% url 'portal:enrollment_credit' r.e.pk %}" hx-get="{% url 'portal:enrollment_credit' r.e.pk %}" hx-target="#modal-content" hx-swap="innerHTML">Acreditar tokens</a>{% endif %}
+    {% if can_reset %}<a class="btn ghost bad sm" href="{% url 'portal:enrollment_reset_chat' r.e.pk %}" hx-get="{% url 'portal:enrollment_reset_chat' r.e.pk %}" hx-target="#modal-content" hx-swap="innerHTML">Reiniciar chat</a>{% endif %}
   </td>
 </tr>

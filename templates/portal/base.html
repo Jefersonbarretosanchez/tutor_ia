@@ -1,49 +1,82 @@
-{% load static portal_tags %}<!doctype html>
-<html lang="es">
+{% load static %}<!doctype html>
+<html lang="es" data-nav="">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Portal{% endblock %} · LTI Chat Scala</title>
+  <script>try{if(localStorage.getItem("portal-nav")==="collapsed"&&innerWidth>900)document.documentElement.dataset.nav="collapsed"}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
   <link rel="stylesheet" href="{% static 'portal/css/portal.css' %}">
   <script src="{% static 'portal/js/htmx.min.js' %}" defer></script>
+  <script src="{% static 'portal/js/portal.js' %}" defer></script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-{% if request.user.is_authenticated %}
-<div class="layout">
-  <nav class="side">
-    <h1>LTI Chat Scala</h1>
-    <a href="{% url 'portal:dashboard' %}">Inicio</a>
-    <div class="grp">Operación</div>
-    {% if request.user|can:"courses.view" %}<a href="{% url 'portal:resource_list' 'courses' %}">Cursos</a>{% endif %}
-    {% if request.user|can:"enrollments.view" %}<a href="{% url 'portal:enrollment_list' %}">Matrículas y tokens</a>{% endif %}
-    {% if request.user|can:"students.view" %}<a href="{% url 'portal:resource_list' 'students' %}">Estudiantes</a>{% endif %}
-    {% if request.user|can:"conversations.view" %}<a href="{% url 'portal:conversation_list' %}">Conversaciones</a>{% endif %}
-    {% if request.user|can:"ledger.view" %}<a href="{% url 'portal:resource_list' 'ledger' %}">Ledger de tokens</a>{% endif %}
-    <div class="grp">Configuración</div>
-    {% if request.user|can:"gates.view" %}<a href="{% url 'portal:resource_list' 'gates' %}">Gates por curso</a>{% endif %}
-    {% if request.user|can:"default_gates.view" %}<a href="{% url 'portal:resource_list' 'default_gates' %}">Gates por defecto</a>{% endif %}
-    {% if request.user|can:"prompts.view" %}<a href="{% url 'portal:resource_list' 'prompts' %}">Plantillas de prompt</a>{% endif %}
-    {% if request.user|can:"flows.view" %}<a href="{% url 'portal:resource_list' 'flows' %}">Flujos n8n</a>{% endif %}
-    <div class="grp">Monitoreo</div>
-    {% if request.user|can:"launch_logs.view" %}<a href="{% url 'portal:resource_list' 'launch_logs' %}">Lanzamientos LTI</a>{% endif %}
-    {% if request.user|can:"audit.view" %}<a href="{% url 'portal:resource_list' 'audit' %}">Auditoría</a>{% endif %}
-    {% if request.user|can:"users.view" or request.user|can:"roles.view" %}<div class="grp">Accesos</div>{% endif %}
-    {% if request.user|can:"users.view" %}<a href="{% url 'portal:user_list' %}">Usuarios</a>{% endif %}
-    {% if request.user|can:"roles.view" %}<a href="{% url 'portal:role_list' %}">Roles y permisos</a>{% endif %}
+{% if request.user.is_authenticated and nav_groups %}
+<a class="skip" href="#content">Saltar al contenido</a>
+<div class="shell">
+  <nav class="side" id="side" aria-label="Navegación principal">
+    <div class="brand"><i class="logo" aria-hidden="true"></i><span class="lbl">LTI Chat Scala</span></div>
+    {% for g in nav_groups %}
+      {% if g.label %}<div class="grp"><span class="lbl">{{ g.label }}</span></div>{% endif %}
+      {% for item in g.items %}
+      <a class="nav{% if item.active %} on{% endif %}" href="{{ item.url }}" data-tip="{{ item.label }}"{% if item.active %} aria-current="page"{% endif %}>
+        {% include "portal/_icon.html" with name=item.icon %}<span class="lbl">{{ item.label }}</span>{% if item.badge %}<span class="n" title="Chats bloqueados">{{ item.badge }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    {% endfor %}
   </nav>
   <div class="main">
-    <div class="top">
-      <span>{{ request.user.get_full_name|default:request.user.username }}
-        {% if request.user.portal_role %}<span class="pill">{{ request.user.portal_role.role.name }}</span>{% endif %}</span>
-      <span><a href="{% url 'portal:password_change' %}">Cambiar contraseña</a> ·
-        <form method="post" action="{% url 'portal:logout' %}">{% csrf_token %}<button class="btn sec sm">Salir</button></form></span>
-    </div>
-    <div class="content">
-      {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+    <header class="top">
+      <button class="btn ghost menu-btn" id="menu-btn" aria-label="Contraer o abrir el menú" aria-expanded="true" aria-controls="side">{% include "portal/_icon.html" with name="menu" %}</button>
+      <button class="search-btn" data-open-palette>{% include "portal/_icon.html" with name="search" %}<span>Buscar o ir a…</span><kbd class="kbd">Ctrl K</kbd></button>
+      <details class="menu user">
+        <summary>
+          <span class="who"><b>{{ request.user.get_full_name|default:request.user.username }}</b>
+            <small>{% if request.user.portal_role %}{{ request.user.portal_role.role.name }}{% else %}Superusuario{% endif %}</small></span>
+          <span class="av" aria-hidden="true">{{ request.user.username|slice:":2"|upper }}</span>
+        </summary>
+        <div class="menu-pop">
+          <a href="{% url 'portal:password_change' %}" hx-get="{% url 'portal:password_change' %}" hx-target="#modal-content" hx-swap="innerHTML">Cambiar contraseña</a>
+          <form method="post" action="{% url 'portal:logout' %}">{% csrf_token %}<button>Cerrar sesión</button></form>
+        </div>
+      </details>
+    </header>
+    <main class="page" id="content">
+      <div class="head">
+        <div>
+          <nav class="crumbs" aria-label="Ruta">{% block crumbs %}{% endblock %}</nav>
+          <h1>{% block heading %}{% endblock %}</h1>
+          {% block lead %}{% endblock %}
+        </div>
+        <div class="actions">{% block actions %}{% endblock %}</div>
+      </div>
       {% block content %}{% endblock %}
-    </div>
+    </main>
   </div>
 </div>
+
+<div class="toasts" role="status" aria-live="polite">
+  {% for m in messages %}<div class="toast {{ m.tags }}"><span>{{ m }}</span><button aria-label="Cerrar aviso">×</button></div>{% endfor %}
+</div>
+
+<dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
+
+<dialog id="confirm-dialog" aria-labelledby="confirm-title">
+  <div class="dlg"><div class="dlg-head"><h2 id="confirm-title">Confirmar acción</h2></div>
+    <div class="dlg-body"><p id="confirm-text" style="margin:0"></p></div>
+    <div class="dlg-foot"><button type="button" class="btn sec" id="confirm-cancel">Cancelar</button><button type="button" class="btn bad" id="confirm-ok">Confirmar</button></div></div>
+</dialog>
+
+<dialog id="palette" class="palette" aria-label="Búsqueda global">
+  <input type="search" name="q" placeholder="Busca una sección, un estudiante o un curso…" autocomplete="off"
+         hx-get="{% url 'portal:search' %}" hx-trigger="input changed delay:250ms" hx-target="#palette-results">
+  <ul id="palette-pages">
+    <li class="ttl">Ir a</li>
+    {% for item in palette_items %}<li><a href="{{ item.url }}">{% include "portal/_icon.html" with name=item.icon %}{{ item.label }}</a></li>{% endfor %}
+  </ul>
+  <div id="palette-results"></div>
+</dialog>
 {% else %}
   {% block anon %}{% endblock %}
 {% endif %}

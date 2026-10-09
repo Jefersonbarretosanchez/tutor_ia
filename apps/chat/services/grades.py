@@ -1,10 +1,10 @@
 """
 Nota de completitud al gradebook de Canvas vía LTI Assignment and Grade
 Services (AGS) — se dispara cuando el agente de n8n marca la conversación
-como "completed" (ver apps/chat/services/n8n_client.py).
+como completada (`puede_avanzar`, ver ClaraReplyView).
 
 Usa un único line item por curso (identificado por su "tag"), reusado
-entre todos los estudiantes: no es una nota por plantilla/momento, sino
+entre todos los estudiantes: no es una nota por momento, sino
 "completó la actividad del Tutor IA en este curso" — completo/incompleto.
 """
 

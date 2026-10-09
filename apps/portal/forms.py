@@ -34,6 +34,8 @@ class UserForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ["username", "first_name", "last_name", "email", "is_active"]
+        labels = {"username": "Usuario", "first_name": "Nombre", "last_name": "Apellido", "email": "Correo electrónico", "is_active": "Cuenta activa"}
+        help_texts = {"username": ""}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -62,10 +64,20 @@ class UserForm(forms.ModelForm):
         return user
 
 
+class ResetChatForm(forms.Form):
+    refund = forms.BooleanField(
+        required=False,
+        label="Acreditar los tokens que consumió",
+        help_text="Devuelve al estudiante los tokens gastados en lo que se va a borrar.",
+    )
+
+
 class RoleForm(forms.ModelForm):
     class Meta:
         model = Role
         fields = ["code", "name", "description"]
+        labels = {"code": "Código interno", "name": "Nombre", "description": "Descripción"}
+        help_texts = {"code": "Solo minúsculas, números y guiones (por ejemplo: tutor-academico)."}
 
 
 class CreditForm(forms.Form):

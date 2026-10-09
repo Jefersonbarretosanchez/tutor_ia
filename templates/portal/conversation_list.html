@@ -1,10 +1,13 @@
 {% extends "portal/base.html" %}
 {% block title %}Conversaciones{% endblock %}
+{% block crumbs %}<a href="{% url 'portal:dashboard' %}">Inicio</a><span>Conversaciones</span>{% endblock %}
+{% block heading %}Conversaciones con Clara{% endblock %}
+{% block lead %}<p class="lead">Solo lectura. Cada apertura de una conversación queda registrada en la auditoría.</p>{% endblock %}
 {% block content %}
-<h2>Conversaciones con Clara</h2>
-<form class="bar" hx-get="{% url 'portal:conversation_list' %}" hx-trigger="keyup changed delay:300ms from:#q, change" hx-target="#results" hx-push-url="true">
-  <input id="q" type="search" name="q" value="{{ q }}" placeholder="Buscar estudiante…">
-  <select name="momento"><option value="">Todos los momentos</option>{% for v, l in momentos %}<option value="{{ v }}" {% if momento == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+<form class="toolbar" action="{% url 'portal:conversation_list' %}" method="get"
+      hx-get="{% url 'portal:conversation_list' %}" hx-trigger="input changed delay:300ms, change" hx-target="#results" hx-push-url="true">
+  <input class="grow" type="search" name="q" value="{{ q }}" placeholder="Buscar estudiante…" aria-label="Buscar estudiante">
+  <select name="momento" aria-label="Momento"><option value="">Todos los momentos</option>{% for v, l in momentos %}<option value="{{ v }}" {% if momento == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
 </form>
 <div id="results">{% include "portal/_conversation_table.html" %}</div>
 {% endblock %}

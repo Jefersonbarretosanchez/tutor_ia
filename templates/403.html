@@ -1,8 +1,8 @@
 {% extends "portal/base.html" %}
 {% block title %}Sin permiso{% endblock %}
+{% block crumbs %}<a href="{% url 'portal:dashboard' %}">Inicio</a><span>Sin permiso</span>{% endblock %}
+{% block heading %}No tienes acceso a esta sección{% endblock %}
 {% block content %}
-<h2>Sin permiso</h2>
-<p>Tu rol no tiene acceso a esta sección. Si crees que es un error, pide al super admin que revise tu matriz de permisos.</p>
-<p><a href="{% url 'portal:dashboard' %}">Volver al inicio</a></p>
+<div class="card empty"><b>Tu rol no incluye este permiso</b>Si lo necesitas, pide al super admin que revise tu matriz de permisos.<p><a class="btn" href="{% url 'portal:dashboard' %}">Volver al inicio</a></p></div>
 {% endblock %}
-{% block anon %}<div class="login card"><h2>Sin permiso</h2><a href="{% url 'portal:login' %}">Ingresar</a></div>{% endblock %}
+{% block anon %}<div class="auth-form" style="min-height:100vh"><div class="card empty"><b>Sin permiso</b><a href="{% url 'portal:login' %}">Ingresar</a></div></div>{% endblock %}

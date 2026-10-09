@@ -1,0 +1,14 @@
+<div class="tablewrap flat">
+<table class="matrix">
+  <thead><tr><th scope="col">Sección</th><th scope="col">Acciones permitidas</th>{% if editable %}<th scope="col"><span class="sr-only">Fila</span></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for row in matrix %}
+  <tr>
+    <td data-label="Sección">{{ row.label }}</td>
+    <td data-label="Permitido">{% for a in row.actions %}<label><input type="checkbox" name="perm" value="{{ row.key }}:{{ a.code }}" {% if a.checked %}checked{% endif %} {% if not editable %}disabled{% endif %}>{{ a.label }}</label>{% endfor %}</td>
+    {% if editable %}<td class="cell-actions" data-label=""><button type="button" class="btn ghost sm" data-toggle-row>Marcar todo</button></td>{% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>

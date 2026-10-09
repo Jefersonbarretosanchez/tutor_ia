@@ -1,3 +1,7 @@
+from datetime import timedelta
+from urllib.parse import quote
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.views import redirect_to_login
@@ -6,21 +10,23 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import ProtectedError, Q, Sum
+from django.db.models.functions import TruncDate
 from django.forms import modelform_factory
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from apps.chat.models import ClaraMoment, TokenUsageLedger
+from apps.chat.models import ClaraMessage, ClaraMoment, TokenUsageLedger
 from apps.chat.services import canvas_pages
-from apps.lti_tool.models import Course, CourseEnrollment, CoursePageGate, LtiLaunchLog
+from apps.lti_tool.models import Course, CourseEnrollment, CoursePageGate, LtiLaunchLog, Student
 
 from . import audit
-from .forms import CreditForm, PasswordChangeForm, PortalAuthenticationForm, RoleForm, UserForm
-from .models import Role, RolePermission, UserRole
-from .permissions import ALL_PERMISSIONS, CATALOG, DELETE, EDIT, CREATE, VIEW, can, is_portal_user, require
+from .forms import CreditForm, PasswordChangeForm, PortalAuthenticationForm, ResetChatForm, RoleForm, UserForm
+from .models import AuditLog, Role, RolePermission, UserRole
+from .permissions import ALL_PERMISSIONS, CATALOG, CREATE, DELETE, EDIT, VIEW, can, is_portal_user, require
 from .registry import RESOURCES
 
 User = get_user_model()
@@ -28,6 +34,11 @@ User = get_user_model()
 PAGE_SIZE = 25
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCK_SECONDS = 15 * 60
+
+
+# --------------------------------------------------------------------------
+# Utilidades: paginación, HTMX y paneles (modal o página completa)
+# --------------------------------------------------------------------------
 
 
 def _page(request, qs):
@@ -42,6 +53,34 @@ def _htmx(request):
     return request.headers.get("HX-Request") == "true"
 
 
+def _panel(request, *, title, body, action="", form=None, submit="Guardar", crumbs=(), wide=False, actions=(), ctx=None, danger=False):
+    """
+    Un mismo contenido sirve como modal (si la petición viene de HTMX) o como página
+    completa (acceso directo por URL). `submit=None` => panel de solo lectura/sin envío.
+    """
+    modal = _htmx(request)
+    context = {
+        "title": title, "body": body, "action": action or request.get_full_path(), "form": form, "submit": submit,
+        "crumbs": crumbs, "wide": wide, "actions": actions, "modal": modal, "danger": danger,
+        "back": crumbs[-2][1] if len(crumbs) > 1 else None, **(ctx or {}),
+    }
+    return render(request, "portal/_panel.html" if modal else "portal/panel_page.html", context)
+
+
+def _done(request, url):
+    """Éxito de un panel: desde modal se recarga la página destino (con su aviso); si no, redirección normal."""
+    if _htmx(request):
+        response = HttpResponse(status=204)
+        response["HX-Redirect"] = url
+        return response
+    return redirect(url)
+
+
+def _back(request, fallback):
+    ref = request.META.get("HTTP_REFERER", "")
+    return ref if ref and url_has_allowed_host_and_scheme(ref, allowed_hosts={request.get_host()}) else fallback
+
+
 def _is_last_super_admin(user):
     """True si `user` es el único super admin activo (no se puede quitar/desactivar)."""
     def is_super(u):
@@ -53,6 +92,10 @@ def _is_last_super_admin(user):
     return not others
 
 
+def _need_login(request):
+    return redirect_to_login(request.get_full_path(), "portal:login")
+
+
 # --------------------------------------------------------------------------
 # Autenticación
 # --------------------------------------------------------------------------
@@ -62,7 +105,7 @@ def login_view(request):
     if is_portal_user(request.user):
         return redirect("portal:dashboard")
 
-    form = PortalAuthenticationForm(request, data=request.POST or None)
+    form = PortalAuthenticationForm(request, data=(request.POST if request.method == "POST" else None))
     if request.method == "POST":
         key = f"portal-login:{audit.client_ip(request)}:{request.POST.get('username', '').lower()[:150]}"
         if cache.get(key, 0) >= LOGIN_MAX_FAILURES:
@@ -92,7 +135,8 @@ def logout_view(request):
 def password_change(request):
     if not is_portal_user(request.user):
         return redirect("portal:login")
-    form = PasswordChangeForm(request.user, request.POST or None)
+    form = PasswordChangeForm(request.user, (request.POST if request.method == "POST" else None))
+    forced = hasattr(request.user, "portal_role") and request.user.portal_role.must_change_password
     if request.method == "POST" and form.is_valid():
         request.user.set_password(form.cleaned_data["new"])
         request.user.save()
@@ -100,34 +144,79 @@ def password_change(request):
         update_session_auth_hash(request, request.user)
         audit.log(request, "password_change", "auth", request.user)
         messages.success(request, "Contraseña actualizada.")
-        return redirect("portal:dashboard")
-    forced = hasattr(request.user, "portal_role") and request.user.portal_role.must_change_password
-    return render(request, "portal/password_change.html", {"form": form, "forced": forced})
+        return _done(request, reverse("portal:dashboard") if forced else _back(request, reverse("portal:dashboard")))
+    return _panel(
+        request, title="Cambiar contraseña", body="portal/_body_password.html", form=form, submit="Guardar contraseña",
+        crumbs=[("Inicio", reverse("portal:dashboard")), ("Cambiar contraseña", None)], ctx={"forced": forced},
+    )
 
 
 # --------------------------------------------------------------------------
-# Dashboard
+# Inicio y búsqueda global
 # --------------------------------------------------------------------------
 
 
 def dashboard(request):
     if not is_portal_user(request.user):
-        return redirect_to_login(request.get_full_path(), "portal:login")
-    enrollments = CourseEnrollment.objects.filter(is_instructor=False)
+        return _need_login(request)
+
+    students = CourseEnrollment.objects.filter(is_instructor=False)
+    blocked = students.filter(chat_enabled=False).count()
+    near_limit = sum(
+        1
+        for e in _enrollment_qs().filter(is_instructor=False, chat_enabled=True)
+        if (e.used or 0) >= e.course.effective_token_limit * settings.TOKEN_WARNING_THRESHOLD_PCT / 100
+    )
+    since = timezone.now() - timedelta(days=13)
+    per_day = dict(
+        TokenUsageLedger.objects.filter(created_at__gte=since, tokens_total__gt=0)
+        .annotate(day=TruncDate("created_at"))
+        .values_list("day")
+        .annotate(total=Sum("tokens_total"))
+    )
+    days = [(since + timedelta(days=i)).date() for i in range(14)]
+    peak = max([per_day.get(d, 0) for d in days] + [1])
+    chart = [{"day": d, "total": per_day.get(d, 0), "pct": round(per_day.get(d, 0) * 100 / peak), "weekend": d.weekday() >= 5} for d in days]
+
     ctx = {
         "courses": Course.objects.filter(is_active=True).count(),
-        "students": enrollments.count(),
-        "blocked": enrollments.filter(chat_enabled=False).count(),
+        "students": students.count(),
+        "blocked": blocked,
+        "near_limit": near_limit,
         "tokens": TokenUsageLedger.objects.aggregate(t=Sum("tokens_total"))["t"] or 0,
+        "chart": chart,
+        "today": timezone.localdate(),
+        "can_enrollments": can(request.user, "enrollments", VIEW),
         "can_logs": can(request.user, "launch_logs", VIEW),
+        "can_audit": can(request.user, "audit", VIEW),
     }
     if ctx["can_logs"]:
-        ctx["failed_launches"] = LtiLaunchLog.objects.filter(validated=False).order_by("-created_at")[:5]
+        ctx["failed_today"] = LtiLaunchLog.objects.filter(validated=False, created_at__date=ctx["today"]).count()
+        ctx["last_failed"] = LtiLaunchLog.objects.filter(validated=False).order_by("-created_at").first()
+    if ctx["can_audit"]:
+        recent = AuditLog.objects.exclude(action__in=["login", "logout", "login_failed", "view_conversation"])[:6]
+        ctx["activity"] = [{"entry": a, "action": audit.action_label(a), "section": audit.resource_label(a)} for a in recent]
     return render(request, "portal/dashboard.html", ctx)
 
 
+@require("courses", VIEW)
+def search(request):
+    """Resultados de la paleta de comandos (HTMX): estudiantes y cursos que coinciden."""
+    q = request.GET.get("q", "").strip()
+    results = []
+    if len(q) >= 2:
+        if can(request.user, "enrollments", VIEW):
+            for st in Student.objects.filter(Q(name__icontains=q) | Q(email__icontains=q) | Q(login_id__icontains=q))[:5]:
+                results.append({"label": st.name or st.login_id, "hint": st.email, "kind": "Estudiante",
+                                "url": f"{reverse('portal:enrollment_list')}?q={quote(st.email or st.name or st.login_id)}"})
+        for c in Course.objects.filter(Q(title__icontains=q) | Q(context_id__icontains=q))[:5]:
+            results.append({"label": c.title or c.context_id, "hint": c.context_id, "kind": "Curso",
+                            "url": reverse("portal:resource_list", args=["courses"]) + f"?q={quote(c.context_id)}"})
+    return render(request, "portal/_search_results.html", {"results": results, "q": q})
+
+
 # --------------------------------------------------------------------------
-# Recursos genéricos (cursos, gates, flujos, prompts, y listados de solo lectura)
+# Recursos genéricos (cursos, páginas bloqueadas, y listados de solo lectura)
 # --------------------------------------------------------------------------
 
 
@@ -139,16 +228,13 @@ def _resource(key):
 
 
 def _cells(res, obj):
-    out = []
-    for _, col in res.columns:
-        out.append(col(obj) if callable(col) else getattr(obj, col))
-    return out
+    return [(header, col(obj) if callable(col) else getattr(obj, col)) for header, col in res.columns]
 
 
 def resource_list(request, key):
     res = _resource(key)
     if not is_portal_user(request.user):
-        return redirect_to_login(request.get_full_path(), "portal:login")
+        return _need_login(request)
     if not can(request.user, key, VIEW):
         raise PermissionDenied
 
@@ -180,20 +266,23 @@ def resource_form(request, key, pk=None):
     res = _resource(key)
     action = EDIT if pk else CREATE
     if not is_portal_user(request.user):
-        return redirect("portal:login")
+        return _need_login(request)
     if not res.fields or not can(request.user, key, action) or (not pk and not res.can_create):
         raise PermissionDenied
 
     obj = get_object_or_404(res.model, pk=pk) if pk else None
-    form_cls = res.form_class or modelform_factory(res.model, fields=res.fields)
-    form = form_cls(request.POST or None, instance=obj)
+    form_cls = res.form_class or modelform_factory(res.model, fields=res.fields, labels=res.labels)
+    form = form_cls((request.POST if request.method == "POST" else None), instance=obj)
     if request.method == "POST" and form.is_valid():
         saved = form.save()
         changed = ", ".join(f for f in form.changed_data if f != "shared_secret") or "—"
         audit.log(request, "create" if not pk else "edit", key, saved, f"campos: {changed}")
         messages.success(request, "Guardado correctamente.")
-        return redirect("portal:resource_list", key=key)
-    return render(request, "portal/resource_form.html", {"res": res, "form": form, "obj": obj})
+        return _done(request, reverse("portal:resource_list", kwargs={"key": key}))
+    return _panel(
+        request, title=f"{'Editar' if obj else 'Nuevo'} · {res.singular}", body="portal/_body_fields.html", form=form,
+        crumbs=[("Inicio", reverse("portal:dashboard")), (res.label, reverse("portal:resource_list", kwargs={"key": key})), ("Editar" if obj else "Nuevo", None)],
+    )
 
 
 @require_POST
@@ -226,7 +315,7 @@ def gate_lock(request, pk):
 
 
 # --------------------------------------------------------------------------
-# Matrículas (reactivar chat, créditos)
+# Matrículas (reactivar chat, créditos, reinicio)
 # --------------------------------------------------------------------------
 
 
@@ -238,6 +327,14 @@ def _enrollment_row(e):
 
 def _enrollment_qs():
     return CourseEnrollment.objects.select_related("student", "course").annotate(used=Sum("token_ledger__tokens_total"))
+
+
+def _row_perms(user):
+    return {
+        "can_reactivate": can(user, "enrollments", "reactivate"),
+        "can_adjust": can(user, "ledger", "adjust"),
+        "can_reset": can(user, "conversations", "reset"),
+    }
 
 
 @require("enrollments", VIEW)
@@ -258,26 +355,33 @@ def enrollment_list(request):
         qs = qs.filter(is_instructor=True)
 
     page = _page(request, qs)
+    base = CourseEnrollment.objects.all()
     ctx = {
         "page": page, "rows": [_enrollment_row(e) for e in page], "q": q, "status": status, "course": course,
+        "chips": [("", "Todos", base.count()), ("blocked", "Bloqueados", base.filter(chat_enabled=False).count()),
+                  ("active", "Activos", base.filter(chat_enabled=True).count()), ("instructor", "Instructores", base.filter(is_instructor=True).count())],
         "courses": Course.objects.all(),
-        "can_reactivate": can(request.user, "enrollments", "reactivate"),
-        "can_adjust": can(request.user, "ledger", "adjust"),
-        "credit_form": CreditForm(),
+        **_row_perms(request.user),
     }
     return render(request, "portal/_enrollment_table.html" if _htmx(request) else "portal/enrollment_list.html", ctx)
 
 
-def _render_row(request, pk, **extra):
+def _row_response(request, pk, flash):
+    """Devuelve la fila actualizada; si venía de un modal, la inyecta en la tabla y cierra el modal."""
     e = get_object_or_404(_enrollment_qs(), pk=pk)
-    ctx = {
-        "r": _enrollment_row(e),
-        "can_reactivate": can(request.user, "enrollments", "reactivate"),
-        "can_adjust": can(request.user, "ledger", "adjust"),
-        "credit_form": extra.pop("credit_form", CreditForm()),
-        **extra,
-    }
-    return render(request, "portal/_enrollment_row.html", ctx)
+    response = render(request, "portal/_enrollment_row.html", {"r": _enrollment_row(e), "flash": flash, **_row_perms(request.user)})
+    response["HX-Retarget"] = f"#enr-{pk}"
+    response["HX-Reswap"] = "outerHTML"
+    response["HX-Trigger"] = "close-modal"
+    return response
+
+
+def _reenable_if_below_limit(e):
+    """Si el chat se bloqueó por límite y ya hay saldo, lo vuelve a habilitar."""
+    if not e.chat_enabled and e.limit_reached_at and TokenUsageLedger.total_for(e) < e.course.effective_token_limit:
+        e.chat_enabled = True
+        e.limit_reached_at = None
+        e.save(update_fields=["chat_enabled", "limit_reached_at"])
 
 
 @require("enrollments", "reactivate")
@@ -288,32 +392,100 @@ def enrollment_reactivate(request, pk):
     e.limit_reached_at = None
     e.save(update_fields=["chat_enabled", "limit_reached_at"])
     audit.log(request, "reactivate_chat", "enrollments", e)
-    return _render_row(request, pk, flash="Chat reactivado.")
+    return _row_response(request, pk, "Chat reactivado.")
 
 
 @require("ledger", "adjust")
-@require_POST
 def enrollment_credit(request, pk):
-    e = get_object_or_404(CourseEnrollment.objects.select_related("course"), pk=pk)
-    form = CreditForm(request.POST)
-    if not form.is_valid():
-        return _render_row(request, pk, credit_form=form, flash="Revisa el formulario de crédito.", open_credit=True)
-    tokens = form.cleaned_data["tokens"]
-    note = f"Crédito manual ({request.user.get_username()}): {form.cleaned_data['note']}"[:255]
+    e = get_object_or_404(CourseEnrollment.objects.select_related("student", "course"), pk=pk)
+    form = CreditForm((request.POST if request.method == "POST" else None))
+    if request.method == "POST" and form.is_valid():
+        tokens = form.cleaned_data["tokens"]
+        note = f"Crédito manual ({request.user.get_username()}): {form.cleaned_data['note']}"[:255]
+        with transaction.atomic():
+            TokenUsageLedger.objects.create(enrollment=e, tokens_total=-tokens, note=note)
+            _reenable_if_below_limit(e)
+        audit.log(request, "credit_tokens", "ledger", e, f"-{tokens} tokens · {form.cleaned_data['note']}")
+        if _htmx(request):
+            return _row_response(request, pk, f"{tokens:,} tokens acreditados.".replace(",", "."))
+        messages.success(request, "Tokens acreditados.")
+        return redirect("portal:enrollment_list")
+    return _panel(
+        request, title="Acreditar tokens", body="portal/_body_fields.html", form=form, submit="Acreditar",
+        ctx={"lead": f"{e.student.name or e.student.login_id} · {e.course}"},
+        crumbs=[("Inicio", reverse("portal:dashboard")), ("Matrículas y tokens", reverse("portal:enrollment_list")), ("Acreditar tokens", None)],
+    )
+
+
+# --------------------------------------------------------------------------
+# Conversaciones (lectura + reinicio)
+# --------------------------------------------------------------------------
+
+
+def _reset_chat(request, enrollment, moments, refund):
+    """
+    Borra los momentos (y sus mensajes) para que el estudiante empiece de cero: en su próxima
+    visita Django vuelve a pedir la apertura a Clara. Opcionalmente acredita en el registro los
+    tokens que esas conversaciones consumieron. No revierte notas ni páginas ya desbloqueadas.
+    """
+    moments = list(moments)
+    if not moments:
+        return 0, 0
+    credited = 0
     with transaction.atomic():
-        TokenUsageLedger.objects.create(enrollment=e, tokens_total=-tokens, note=note)
-        used = TokenUsageLedger.total_for(e)
-        if not e.chat_enabled and e.limit_reached_at and used < e.course.effective_token_limit:
-            e.chat_enabled = True
-            e.limit_reached_at = None
-            e.save(update_fields=["chat_enabled", "limit_reached_at"])
-    audit.log(request, "credit_tokens", "ledger", e, f"-{tokens} tokens · {form.cleaned_data['note']}")
-    return _render_row(request, pk, flash=f"{tokens:,} tokens acreditados.")
+        if refund:
+            credited = ClaraMessage.objects.filter(moment__in=moments, role=ClaraMessage.ROLE_ASSISTANT).aggregate(t=Sum("tokens_used"))["t"] or 0
+            if credited:
+                TokenUsageLedger.objects.create(
+                    enrollment=enrollment, tokens_total=-credited,
+                    note=f"Reinicio de chat ({request.user.get_username()}): tokens devueltos"[:255],
+                )
+        ClaraMoment.objects.filter(pk__in=[m.pk for m in moments]).delete()
+        _reenable_if_below_limit(enrollment)
+    audit.log(request, "reset_chat", "conversations", enrollment,
+              f"{len(moments)} momento(s) borrado(s)" + (f" · {credited} tokens acreditados" if credited else ""))
+    return len(moments), credited
 
 
-# --------------------------------------------------------------------------
-# Conversaciones (solo lectura)
-# --------------------------------------------------------------------------
+def _reset_message(n, credited):
+    if not n:
+        return "No había conversaciones que reiniciar."
+    return f"Chat reiniciado: {n} conversación(es) borrada(s)" + (f" y {credited:,} tokens acreditados.".replace(",", ".") if credited else ".")
+
+
+def _reset_panel(request, enrollment, moments, title, lead, crumbs):
+    form = ResetChatForm((request.POST if request.method == "POST" else None))
+    if request.method == "POST" and form.is_valid():
+        n, credited = _reset_chat(request, enrollment, moments, form.cleaned_data["refund"])
+        messages.success(request, _reset_message(n, credited))
+        return _done(request, _back(request, reverse("portal:enrollment_list")) if _htmx(request) else reverse("portal:conversation_list"))
+    return _panel(
+        request, title=title, body="portal/_body_fields.html", form=form, submit="Reiniciar chat", danger=True,
+        ctx={"lead": lead, "warning": "Se borrarán los mensajes y el estudiante empezará de cero. Esta acción no se puede deshacer, "
+                                       "ni revierte la nota enviada a Canvas ni las páginas ya desbloqueadas."},
+        crumbs=crumbs,
+    )
+
+
+@require("conversations", "reset")
+def conversation_reset(request, pk):
+    moment = get_object_or_404(ClaraMoment.objects.select_related("enrollment__course", "enrollment__student"), pk=pk)
+    student = moment.enrollment.student
+    return _reset_panel(
+        request, moment.enrollment, [moment], "Reiniciar conversación",
+        f"{student.name or student.login_id} · {moment.get_momento_display()}",
+        [("Inicio", reverse("portal:dashboard")), ("Conversaciones", reverse("portal:conversation_list")), ("Reiniciar", None)],
+    )
+
+
+@require("conversations", "reset")
+def enrollment_reset_chat(request, pk):
+    e = get_object_or_404(CourseEnrollment.objects.select_related("course", "student"), pk=pk)
+    return _reset_panel(
+        request, e, e.clara_moments.all(), "Reiniciar chat del estudiante",
+        f"{e.student.name or e.student.login_id} · {e.course} · {e.clara_moments.count()} conversación(es)",
+        [("Inicio", reverse("portal:dashboard")), ("Matrículas y tokens", reverse("portal:enrollment_list")), ("Reiniciar chat", None)],
+    )
 
 
 @require("conversations", VIEW)
@@ -333,7 +505,17 @@ def conversation_list(request):
 def conversation_detail(request, pk):
     moment = get_object_or_404(ClaraMoment.objects.select_related("enrollment__student", "enrollment__course"), pk=pk)
     audit.log(request, "view_conversation", "conversations", moment)
-    return render(request, "portal/conversation_detail.html", {"m": moment, "msgs": moment.messages.order_by("created_at")})
+    student = moment.enrollment.student
+    name = student.name or student.login_id
+    actions = []
+    if can(request.user, "conversations", "reset"):
+        actions.append({"label": "Reiniciar esta conversación", "url": reverse("portal:conversation_reset", args=[pk]), "danger": True})
+    return _panel(
+        request, title=f"{name} · {moment.get_momento_display()}", body="portal/_body_conversation.html", submit=None, wide=True, actions=actions,
+        ctx={"m": moment, "msgs": moment.messages.order_by("created_at"),
+             "lead": f"{moment.enrollment.course} · {moment.tokens_used} tokens · {moment.porcentaje_usado}% del presupuesto"},
+        crumbs=[("Inicio", reverse("portal:dashboard")), ("Conversaciones", reverse("portal:conversation_list")), (name, None)],
+    )
 
 
 # --------------------------------------------------------------------------
@@ -356,15 +538,13 @@ def user_list(request):
     return render(request, "portal/_user_table.html" if _htmx(request) else "portal/user_list.html", ctx)
 
 
-def _user_guard(request, target, form=None):
+def _user_guard(request, target, form):
     """Impide auto-bloqueo: no desactivarse/degradarse a sí mismo ni dejar el sistema sin super admin."""
-    if form is None:
-        return None
     new_role = form.cleaned_data["role"]
     deactivating = not form.cleaned_data["is_active"]
     demoting = new_role.code != Role.SUPER_ADMIN and not target.is_superuser
     if (deactivating or demoting) and _is_last_super_admin(target):
-        return "Debe quedar al menos un super admin activo."
+        return "Debe quedar al menos un superadministrador activo."
     if target.pk == request.user.pk and deactivating:
         return "No puedes desactivar tu propia cuenta."
     return None
@@ -372,12 +552,11 @@ def _user_guard(request, target, form=None):
 
 def user_form(request, pk=None):
     if not is_portal_user(request.user):
-        return redirect("portal:login")
-    action = EDIT if pk else CREATE
-    if not can(request.user, "users", action):
+        return _need_login(request)
+    if not can(request.user, "users", EDIT if pk else CREATE):
         raise PermissionDenied
     target = get_object_or_404(User, pk=pk) if pk else None
-    form = UserForm(request.POST or None, instance=target)
+    form = UserForm((request.POST if request.method == "POST" else None), instance=target)
     if request.method == "POST" and form.is_valid():
         problem = _user_guard(request, target, form) if target else None
         if problem:
@@ -386,8 +565,12 @@ def user_form(request, pk=None):
             saved = form.save()
             audit.log(request, "create" if not pk else "edit", "users", saved, f"rol: {form.cleaned_data['role']}" + (" · contraseña restablecida" if form.cleaned_data.get("password") else ""))
             messages.success(request, "Usuario guardado.")
-            return redirect("portal:user_list")
-    return render(request, "portal/user_form.html", {"form": form, "target": target})
+            return _done(request, reverse("portal:user_list"))
+    return _panel(
+        request, title="Editar usuario" if target else "Nuevo usuario", body="portal/_body_fields.html", form=form,
+        crumbs=[("Inicio", reverse("portal:dashboard")), ("Usuarios", reverse("portal:user_list")), (target.username if target else "Nuevo", None)],
+        ctx={"autocomplete_off": True},
+    )
 
 
 @require("users", DELETE)
@@ -397,7 +580,7 @@ def user_delete(request, pk):
     if target.pk == request.user.pk:
         messages.error(request, "No puedes eliminar tu propia cuenta.")
     elif _is_last_super_admin(target):
-        messages.error(request, "Debe quedar al menos un super admin activo.")
+        messages.error(request, "Debe quedar al menos un superadministrador activo.")
     else:
         label = target.get_username()
         target.delete()
@@ -412,6 +595,7 @@ def role_list(request):
     return render(request, "portal/role_list.html", {
         "roles": [{"role": r, "perm_count": len(ALL_PERMISSIONS) if r.code == Role.SUPER_ADMIN else r.permissions.count(), "users": r.user_roles.count()} for r in roles],
         "can_create": can(request.user, "roles", CREATE),
+        "can_edit": can(request.user, "roles", EDIT),
         "can_delete": can(request.user, "roles", DELETE),
         "total": len(ALL_PERMISSIONS),
     })
@@ -419,21 +603,24 @@ def role_list(request):
 
 def role_create(request):
     if not is_portal_user(request.user):
-        return redirect("portal:login")
+        return _need_login(request)
     if not can(request.user, "roles", CREATE):
         raise PermissionDenied
-    form = RoleForm(request.POST or None)
+    form = RoleForm((request.POST if request.method == "POST" else None))
     if request.method == "POST" and form.is_valid():
         role = form.save()
         audit.log(request, "create", "roles", role)
         messages.success(request, "Rol creado. Asígnale permisos.")
-        return redirect("portal:role_matrix", pk=role.pk)
-    return render(request, "portal/role_form.html", {"form": form})
+        return _done(request, reverse("portal:role_list"))
+    return _panel(
+        request, title="Nuevo rol", body="portal/_body_fields.html", form=form, submit="Crear rol",
+        crumbs=[("Inicio", reverse("portal:dashboard")), ("Roles y permisos", reverse("portal:role_list")), ("Nuevo", None)],
+    )
 
 
 def role_matrix(request, pk):
     if not is_portal_user(request.user):
-        return redirect("portal:login")
+        return _need_login(request)
     if not can(request.user, "roles", VIEW):
         raise PermissionDenied
     role = get_object_or_404(Role, pk=pk)
@@ -448,15 +635,22 @@ def role_matrix(request, pk):
             RolePermission.objects.filter(role=role).delete()
             RolePermission.objects.bulk_create(RolePermission(role=role, resource=r, action=a) for r, a in sorted(wanted))
         audit.log(request, "edit_matrix", "roles", role, f"{len(wanted)} permisos")
-        messages.success(request, "Matriz de permisos actualizada.")
-        return redirect("portal:role_matrix", pk=role.pk)
+        messages.success(request, "Permisos actualizados.")
+        return _done(request, reverse("portal:role_list"))
 
     granted = ALL_PERMISSIONS if locked else set(RolePermission.objects.filter(role=role).values_list("resource", "action"))
     matrix = [
         {"key": k, "label": label, "actions": [{"code": a, "label": al, "checked": (k, a) in granted} for a, al in acts.items()]}
         for k, (label, acts) in CATALOG.items()
     ]
-    return render(request, "portal/role_matrix.html", {"role": role, "matrix": matrix, "locked": locked, "editable": editable})
+    lead = ("El rol Superadministrador tiene todos los permisos y no se puede modificar." if locked
+            else "Marca lo que este rol puede hacer. Los cambios aplican en la siguiente petición de cada usuario." if editable
+            else "Solo lectura: no tienes permiso para editar la matriz.")
+    return _panel(
+        request, title=f"Permisos · {role.name}", body="portal/_body_matrix.html", submit="Guardar permisos" if editable else None, wide=True,
+        ctx={"matrix": matrix, "editable": editable, "lead": lead},
+        crumbs=[("Inicio", reverse("portal:dashboard")), ("Roles y permisos", reverse("portal:role_list")), (role.name, None)],
+    )
 
 
 @require("roles", DELETE)

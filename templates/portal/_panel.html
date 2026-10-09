@@ -1,0 +1,27 @@
+<div class="panel{% if modal %} dlg{% if wide %} wide{% endif %}{% endif %}">
+  {% if modal %}
+  <div class="dlg-head">
+    <div><h2 id="modal-title">{{ title }}</h2>{% if lead %}<p class="lead">{{ lead }}</p>{% endif %}</div>
+    <button type="button" class="btn ghost sm" data-close aria-label="Cerrar">{% include "portal/_icon.html" with name="x" %}</button>
+  </div>
+  {% endif %}
+  {% if submit %}
+  <form method="post" action="{{ action }}"{% if modal %} hx-post="{{ action }}" hx-target="#modal-content" hx-swap="innerHTML"{% endif %}{% if autocomplete_off %} autocomplete="off"{% endif %}>
+    {% csrf_token %}
+    <div class="dlg-body">
+      {% if warning %}<div class="notice bad" role="alert">{% include "portal/_icon.html" with name="alert" %}<span>{{ warning }}</span></div>{% endif %}
+      {% include body %}
+    </div>
+    <div class="dlg-foot">
+      {% if modal %}<button type="button" class="btn sec" data-close>Cancelar</button>{% elif back %}<a class="btn sec" href="{{ back }}">Cancelar</a>{% endif %}
+      <button class="btn{% if danger %} bad{% endif %}">{{ submit }}</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="dlg-body">{% include body %}</div>
+  <div class="dlg-foot">
+    {% for a in actions %}<a class="btn sec{% if a.danger %} danger{% endif %}" href="{{ a.url }}" hx-get="{{ a.url }}" hx-target="#modal-content" hx-swap="innerHTML">{{ a.label }}</a>{% endfor %}
+    {% if modal %}<button type="button" class="btn" data-close>Cerrar</button>{% elif back %}<a class="btn" href="{{ back }}">Volver</a>{% endif %}
+  </div>
+  {% endif %}
+</div>

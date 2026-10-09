@@ -1,10 +1,12 @@
 {% extends "portal/base.html" %}
 {% block title %}Usuarios{% endblock %}
+{% block crumbs %}<a href="{% url 'portal:dashboard' %}">Inicio</a><span>Usuarios</span>{% endblock %}
+{% block heading %}Usuarios del portal{% endblock %}
+{% block actions %}{% if can_create %}<a class="btn" href="{% url 'portal:user_create' %}" hx-get="{% url 'portal:user_create' %}" hx-target="#modal-content" hx-swap="innerHTML">{% include "portal/_icon.html" with name="plus" %}Nuevo usuario</a>{% endif %}{% endblock %}
 {% block content %}
-<div class="bar">
-  <h2 style="margin:0">Usuarios</h2><span class="sp"></span>
-  <input type="search" name="q" value="{{ q }}" placeholder="Buscar…" hx-get="{% url 'portal:user_list' %}" hx-trigger="keyup changed delay:300ms, search" hx-target="#results" hx-push-url="true">
-  {% if can_create %}<a class="btn" href="{% url 'portal:user_create' %}">+ Nuevo usuario</a>{% endif %}
-</div>
+<form class="toolbar" role="search" action="{% url 'portal:user_list' %}" method="get">
+  <input class="grow" type="search" name="q" value="{{ q }}" placeholder="Buscar por usuario, nombre o correo…" aria-label="Buscar"
+         hx-get="{% url 'portal:user_list' %}" hx-trigger="input changed delay:300ms, search" hx-target="#results" hx-push-url="true">
+</form>
 <div id="results">{% include "portal/_user_table.html" %}</div>
 {% endblock %}

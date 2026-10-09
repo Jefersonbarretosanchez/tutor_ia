@@ -1,0 +1,6 @@
+{% if results %}
+<ul>
+  <li class="ttl">Resultados</li>
+  {% for r in results %}<li><a href="{{ r.url }}"><span>{{ r.label }}<span class="sub"> · {{ r.hint }}</span></span><span class="kind">{{ r.kind }}</span></a></li>{% endfor %}
+</ul>
+{% elif q|length >= 2 %}<p class="empty">Sin resultados para «{{ q }}».</p>{% endif %}

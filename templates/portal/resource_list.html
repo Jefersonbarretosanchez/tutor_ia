@@ -1,10 +1,14 @@
 {% extends "portal/base.html" %}
 {% block title %}{{ res.label }}{% endblock %}
+{% block crumbs %}<a href="{% url 'portal:dashboard' %}">Inicio</a><span>{{ res.label }}</span>{% endblock %}
+{% block heading %}{{ res.label }}{% endblock %}
+{% block actions %}{% if can_create %}<a class="btn" href="{% url 'portal:resource_create' res.key %}" hx-get="{% url 'portal:resource_create' res.key %}" hx-target="#modal-content" hx-swap="innerHTML">{% include "portal/_icon.html" with name="plus" %}Nuevo</a>{% endif %}{% endblock %}
 {% block content %}
-<div class="bar">
-  <h2 style="margin:0">{{ res.label }}</h2><span class="sp"></span>
-  {% if res.search %}<input type="search" name="q" value="{{ q }}" placeholder="Buscar…" hx-get="{% url 'portal:resource_list' res.key %}" hx-trigger="keyup changed delay:300ms, search" hx-target="#results" hx-push-url="true">{% endif %}
-  {% if can_create %}<a class="btn" href="{% url 'portal:resource_create' res.key %}">+ Nuevo</a>{% endif %}
-</div>
+{% if res.search %}
+<form class="toolbar" role="search" action="{% url 'portal:resource_list' res.key %}" method="get">
+  <input class="grow" type="search" name="q" value="{{ q }}" placeholder="Buscar en {{ res.label|lower }}…" aria-label="Buscar"
+         hx-get="{% url 'portal:resource_list' res.key %}" hx-trigger="input changed delay:300ms, search" hx-target="#results" hx-push-url="true">
+</form>
+{% endif %}
 <div id="results">{% include "portal/_table.html" %}</div>
 {% endblock %}

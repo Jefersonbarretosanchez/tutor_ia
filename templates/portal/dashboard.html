@@ -1,17 +1,54 @@
 {% extends "portal/base.html" %}
 {% block title %}Inicio{% endblock %}
+{% block crumbs %}<span>Inicio</span>{% endblock %}
+{% block heading %}Hola, {{ request.user.first_name|default:request.user.username }}{% endblock %}
+{% block lead %}<p class="lead">{{ today|date:"l j \d\e F \d\e Y"|capfirst }} · esto es lo que necesita tu atención.</p>{% endblock %}
 {% block content %}
-<h2>Resumen</h2>
-<div class="stats">
-  <div class="card stat"><b>{{ courses }}</b><span>Cursos activos</span></div>
-  <div class="card stat"><b>{{ students }}</b><span>Matrículas de estudiantes</span></div>
-  <div class="card stat"><b>{{ blocked }}</b><span>Chats bloqueados</span></div>
-  <div class="card stat"><b>{{ tokens }}</b><span>Tokens netos consumidos</span></div>
+<section class="grid" aria-label="Indicadores">
+  <div class="card kpi"><span class="kpi-ico teal">{% include "portal/_icon.html" with name="layers" %}</span><div><span>Cursos activos</span><b>{{ courses }}</b></div></div>
+  <div class="card kpi"><span class="kpi-ico blue">{% include "portal/_icon.html" with name="users" %}</span><div><span>Matrículas de estudiantes</span><b>{{ students }}</b></div></div>
+  {% if can_enrollments %}
+  <a class="card kpi link{% if blocked %} alert{% endif %}" href="{% url 'portal:enrollment_list' %}?status=blocked"><span class="kpi-ico {% if blocked %}red{% else %}green{% endif %}">{% include "portal/_icon.html" with name="lock" %}</span><div><span>Chats bloqueados</span><b>{{ blocked }}</b></div></a>
+  {% endif %}
+  <div class="card kpi"><span class="kpi-ico amber">{% include "portal/_icon.html" with name="coins" %}</span><div><span>Tokens netos consumidos</span><b>{{ tokens }}</b></div></div>
+</section>
+
+<div class="cols">
+  <section class="card" aria-labelledby="h-att">
+    <h2 id="h-att">Requiere atención</h2>
+    {% if can_enrollments %}
+    <div class="attn"><span class="dot {% if blocked %}red{% else %}green{% endif %}"></span>
+      <p>{{ blocked }} estudiante{{ blocked|pluralize }} con el chat bloqueado<small>Llegaron al límite o fueron desactivados</small></p>
+      {% if blocked %}<a class="btn sm" href="{% url 'portal:enrollment_list' %}?status=blocked">Revisar</a>{% endif %}</div>
+    <div class="attn"><span class="dot {% if near_limit %}amber{% else %}green{% endif %}"></span>
+      <p>{{ near_limit }} estudiante{{ near_limit|pluralize }} cerca del límite<small>Superan el umbral de aviso con el chat aún activo</small></p>
+      {% if near_limit %}<a class="btn sm sec" href="{% url 'portal:enrollment_list' %}?status=active">Ver lista</a>{% endif %}</div>
+    {% endif %}
+    {% if can_logs %}
+    <div class="attn"><span class="dot {% if failed_today %}amber{% else %}green{% endif %}"></span>
+      <p>{{ failed_today }} lanzamiento{{ failed_today|pluralize }} LTI fallido{{ failed_today|pluralize }} hoy
+        <small>{% if last_failed %}Último: {{ last_failed.error|truncatechars:70|default:"sin detalle" }}{% else %}Sin fallos registrados{% endif %}</small></p>
+      <a class="btn sm sec" href="{% url 'portal:resource_list' 'launch_logs' %}">Ver registros</a></div>
+    {% endif %}
+  </section>
+
+  {% if can_audit %}
+  <section class="card" aria-labelledby="h-act">
+    <h2 id="h-act">Actividad reciente</h2>
+    {% for a in activity %}
+    <div class="log"><time>{{ a.entry.created_at|date:"H:i" }}</time><div><b>{{ a.entry.username }}</b> · {{ a.action|lower }} {{ a.entry.object_repr }}
+      <div class="sub">{{ a.section }}{% if a.entry.detail %} · {{ a.entry.detail|truncatechars:60 }}{% endif %}</div></div></div>
+    {% empty %}<p class="empty">Sin actividad todavía.</p>{% endfor %}
+    <p style="margin:12px 0 0"><a href="{% url 'portal:resource_list' 'audit' %}">Ver toda la auditoría →</a></p>
+  </section>
+  {% endif %}
 </div>
-{% if can_logs %}
-<h2>Últimos lanzamientos LTI fallidos</h2>
-<table><tr><th>Fecha</th><th>Issuer</th><th>IP</th><th>Error</th></tr>
-{% for l in failed_launches %}<tr><td>{{ l.created_at|date:"Y-m-d H:i" }}</td><td>{{ l.issuer }}</td><td>{{ l.ip_address }}</td><td>{{ l.error|truncatechars:90 }}</td></tr>
-{% empty %}<tr><td colspan="4">Sin fallos recientes.</td></tr>{% endfor %}</table>
-{% endif %}
+
+<section class="card" aria-labelledby="h-tok">
+  <h2 id="h-tok">Consumo de tokens · últimos 14 días</h2>
+  <div class="bars" role="img" aria-label="Tokens consumidos por día en las últimas dos semanas">
+    {% for d in chart %}<div class="{% if d.weekend %}we{% endif %}" title="{{ d.day|date:'d/m' }}: {{ d.total }} tokens"><i style="height:{{ d.pct }}%"></i><small>{{ d.day|date:"d" }}</small></div>{% endfor %}
+  </div>
+  <p class="sub" style="margin:10px 0 0">Las barras tenues son fines de semana.</p>
+</section>
 {% endblock %}

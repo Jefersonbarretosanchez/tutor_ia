@@ -3,9 +3,7 @@ Cliente HTTP hacia los webhooks fijos de Clara en n8n:
 `/clara/apertura` (pregunta detonadora del momento) y `/clara/responder`
 (turno de conversación).
 
-A diferencia de apps.chat.services.n8n_client (webhook genérico
-configurable por curso desde /admin/, vía N8nFlow/PromptTemplate), este es
-un contrato cerrado y específico del workflow "Tutor IA (Clara)": sin
+Es un contrato cerrado y específico del workflow "Tutor IA (Clara)": sin
 header de autenticación, y con un vocabulario fijo de `momento` (ver
 apps.chat.models.ClaraMoment.MOMENTO_CHOICES).
 """

@@ -1,0 +1,4 @@
+<div class="chat">
+  {% for msg in msgs %}<div class="m {{ msg.role }}">{{ msg.content }}<div class="sub">{% if msg.role == "assistant" %}Clara{% else %}Estudiante{% endif %} · {{ msg.created_at|date:"d/m H:i" }}</div></div>
+  {% empty %}<p class="empty">Sin mensajes.</p>{% endfor %}
+</div>

@@ -1,4 +1,31 @@
 from .models import AuditLog
+from .permissions import CATALOG
+
+ACTION_LABELS = {
+    "login": "Inicio de sesión",
+    "logout": "Cierre de sesión",
+    "login_failed": "Intento de ingreso fallido",
+    "password_change": "Cambio de contraseña",
+    "create": "Creó",
+    "edit": "Editó",
+    "delete": "Eliminó",
+    "edit_matrix": "Editó permisos del rol",
+    "lock_page": "Bloqueó una página",
+    "reactivate_chat": "Reactivó el chat",
+    "credit_tokens": "Acreditó tokens",
+    "reset_chat": "Reinició el chat",
+    "view_conversation": "Abrió una conversación",
+}
+
+
+def action_label(entry):
+    return ACTION_LABELS.get(entry.action, entry.action)
+
+
+def resource_label(entry):
+    if entry.resource == "auth":
+        return "Autenticación"
+    return CATALOG[entry.resource][0] if entry.resource in CATALOG else entry.resource
 
 
 def client_ip(request):

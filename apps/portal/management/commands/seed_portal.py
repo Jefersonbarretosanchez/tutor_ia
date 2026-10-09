@@ -23,6 +23,8 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         for code, (name, desc, perms) in DEFAULT_ROLES.items():
             role, created = Role.objects.get_or_create(code=code, defaults={"name": name, "description": desc, "is_system": True})
+            if not created and role.is_system:
+                Role.objects.filter(pk=role.pk).update(name=name, description=desc)  # nombres en español
             if created or opts["reset_permissions"]:
                 RolePermission.objects.filter(role=role).delete()
                 RolePermission.objects.bulk_create(RolePermission(role=role, resource=r, action=a) for r, a in sorted(perms))

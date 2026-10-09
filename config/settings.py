@@ -69,7 +69,7 @@ MIDDLEWARE = [
     # (ver LTI_FRAME_ANCESTORS más abajo): la LTI vive embebida en un iframe
     # de Canvas, así que no podemos usar DENY/SAMEORIGIN por defecto.
     "apps.lti_tool.middleware.LtiFrameAncestorsMiddleware",
-    "apps.portal.middleware.ForcePasswordChangeMiddleware",
+    "apps.portal.middleware.PortalMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -84,6 +84,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.portal.navigation.portal_context",
             ],
         },
     },

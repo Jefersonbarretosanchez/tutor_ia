@@ -1,16 +1,20 @@
 {% extends "portal/base.html" %}
-{% block title %}Matrículas{% endblock %}
+{% block title %}Matrículas y tokens{% endblock %}
+{% block crumbs %}<a href="{% url 'portal:dashboard' %}">Inicio</a><span>Matrículas y tokens</span>{% endblock %}
+{% block heading %}Matrículas y tokens{% endblock %}
+{% block lead %}<p class="lead">Consumo por estudiante, reactivación del chat y créditos manuales.</p>{% endblock %}
 {% block content %}
-<h2>Matrículas y consumo de tokens</h2>
-<form class="bar" hx-get="{% url 'portal:enrollment_list' %}" hx-trigger="keyup changed delay:300ms from:#q, change" hx-target="#results" hx-push-url="true">
-  <input id="q" type="search" name="q" value="{{ q }}" placeholder="Buscar estudiante…">
-  <select name="course"><option value="">Todos los cursos</option>{% for c in courses %}<option value="{{ c.pk }}" {% if course == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
-  <select name="status">
-    <option value="">Todos</option>
-    <option value="active" {% if status == "active" %}selected{% endif %}>Chat activo</option>
-    <option value="blocked" {% if status == "blocked" %}selected{% endif %}>Chat bloqueado</option>
-    <option value="instructor" {% if status == "instructor" %}selected{% endif %}>Instructores</option>
-  </select>
+<div class="chips" role="group" aria-label="Filtrar por estado">
+  {% for value, label, count in chips %}
+  <a class="chip{% if status == value %} on{% endif %}" href="?status={{ value }}{% if course %}&course={{ course }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}"
+     {% if status == value %}aria-current="true"{% endif %}>{{ label }} <small>{{ count }}</small></a>
+  {% endfor %}
+</div>
+<form class="toolbar" action="{% url 'portal:enrollment_list' %}" method="get"
+      hx-get="{% url 'portal:enrollment_list' %}" hx-trigger="input changed delay:300ms, change" hx-target="#results" hx-push-url="true">
+  <input type="hidden" name="status" value="{{ status }}">
+  <input class="grow" type="search" name="q" value="{{ q }}" placeholder="Buscar estudiante por nombre o correo…" aria-label="Buscar estudiante">
+  <select name="course" aria-label="Curso"><option value="">Todos los cursos</option>{% for c in courses %}<option value="{{ c.pk }}" {% if course == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
 </form>
 <div id="results">{% include "portal/_enrollment_table.html" %}</div>
 {% endblock %}

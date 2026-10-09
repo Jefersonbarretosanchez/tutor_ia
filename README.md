@@ -39,31 +39,13 @@ pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser   # para entrar a /admin/
 
-# Crea un curso, estudiante, plantillas y un N8nFlow de ejemplo,
-# e imprime un token de sesión listo para usar:
-python manage.py seed_demo --n8n-webhook-url "https://tu-n8n/webhook/clara" --n8n-secret "loquesea"
+python manage.py seed_portal --superadmin TU_USUARIO   # roles del portal; entra por /portal/
 
 python manage.py runserver
 ```
 
-Con el token que imprime `seed_demo` puedes probar la API directamente,
-sin pasar por un lanzamiento real de Canvas:
-
-```bash
-curl -H "Authorization: Bearer <token>" http://127.0.0.1:8000/api/templates/
-```
-
-### Probar sin depender de un n8n real
-
-`tools/mock_n8n.py` levanta un servidor HTTP mínimo que responde como lo
-hace hoy el webhook `/clara` (incluye el campo `tokens_used` en vez del
-desglose `tokens.{prompt,completion,total}`, para probar también la
-compatibilidad hacia atrás):
-
-```bash
-python tools/mock_n8n.py &
-# apunta el N8nFlow de prueba a http://127.0.0.1:9000/webhook/clara desde /admin/
-```
+El chat real solo se prueba con un lanzamiento LTI desde Canvas (ver la
+configuración de abajo); el portal de administración vive en `/portal/`.
 
 ## Variables de entorno
 
@@ -85,7 +67,7 @@ Copiar `.env.example` a `.env` y completar. Lo importante:
 5. Habilitar los claims/placements que necesites (como mínimo, el `context` claim para tener `course_id`).
 6. Copiar el `Client ID` y los datos de la plataforma que Canvas te muestra (issuer, auth login url, auth token url, JWKS de la plataforma).
 7. En `/admin/` de Django, crear:
-   - Una **LTI Tool Key** (clave RSA propia de la herramienta — puedes generarla con `openssl genrsa 2048`, o dejar que `seed_demo` la genere si estás probando).
+   - Una **LTI Tool Key** (clave RSA propia de la herramienta — puedes generarla con `openssl genrsa 2048`).
    - Un **LTI Tool** con el issuer/client_id/URLs del paso 6, la key anterior, y el/los `deployment_id` que Canvas asigna al instalar la herramienta en un curso.
 8. **Por cada página/unidad de Canvas** donde se inserte el link de la herramienta (asignación, página, o item de módulo de tipo "External Tool"), la URL de lanzamiento debe llevar `?momento=<valor>` al final, con uno de estos valores: `bienvenida`, `unidad_1`, `unidad_2` o `cierre`. Por ejemplo:
 
@@ -161,12 +143,8 @@ collectstatic + reinicio del servicio).
 ## Qué falta (ver el documento de alcance para el detalle completo)
 
 - **En n8n** (no es código de este repo, pero es un prerrequisito): agregar
-  la validación del header `X-Internal-Token` a `/clara`, conectar WF4
-  (RAG real) vía `Execute Workflow`, y devolver el desglose
-  `tokens.{prompt,completion,total}` en vez de `tokens_used` — este
-  proyecto ya funciona con cualquiera de las dos formas (ver
-  `apps/chat/services/n8n_client.py`), pero el desglose da mejor
-  trazabilidad.
+  la validación del header `X-Internal-Token` a los webhooks de Clara y
+  conectar WF4 (RAG real) vía `Execute Workflow`.
 - **Migrar Supabase → PostgreSQL propio** del lado de n8n (sección 9 del alcance).
 - **Fase 2**: panel de reporting para docentes/coordinación, aviso previo
   al estudiante al acercarse al límite (ya se calcula `usage.warning` en

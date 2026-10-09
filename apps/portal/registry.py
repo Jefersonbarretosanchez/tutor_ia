@@ -9,11 +9,10 @@ viven en views.py.
 
 from dataclasses import dataclass, field
 
-from django import forms
-
-from apps.chat.models import N8nFlow, PromptTemplate, TokenUsageLedger
+from apps.chat.models import TokenUsageLedger
 from apps.lti_tool.models import Course, CoursePageGate, DefaultPageGate, LtiLaunchLog, Student
 
+from . import audit
 from .models import AuditLog
 
 
@@ -31,31 +30,8 @@ class Resource:
     form_class: type = None
     extra_actions: tuple = ()  # (acción de permiso, url name, etiqueta)
     ordering: tuple = ()
-
-    @property
-    def readonly(self):
-        return not self.fields
-
-
-class FlowForm(forms.ModelForm):
-    """El secreto nunca se muestra; vacío al editar = conservar el actual."""
-
-    shared_secret = forms.CharField(
-        required=False,
-        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
-        label="Secreto compartido (X-Internal-Token)",
-        help_text="Déjalo vacío para conservar el actual.",
-    )
-
-    class Meta:
-        model = N8nFlow
-        fields = ["code", "label", "webhook_url", "shared_secret", "timeout_seconds", "is_active"]
-
-    def clean_shared_secret(self):
-        value = self.cleaned_data.get("shared_secret")
-        if not value and not self.instance.pk:
-            raise forms.ValidationError("Obligatorio al crear un flujo.")
-        return value or self.instance.shared_secret
+    singular: str = ""  # nombre en singular para los títulos del formulario
+    labels: dict = field(default_factory=dict)  # etiquetas en español del formulario
 
 
 def _bool(attr):
@@ -66,71 +42,62 @@ RESOURCES = {
     r.key: r
     for r in [
         Resource(
-            "courses", "Cursos", Course,
+            "courses", "Cursos", Course, singular="curso",
             columns=[
                 ("Título", lambda o: o.title or o.context_id),
-                ("Context ID", "context_id"),
+                ("ID de contexto", "context_id"),
                 ("Límite tokens", lambda o: o.effective_token_limit),
                 ("Activo", _bool("is_active")),
                 ("AGS", lambda o: "Sí" if o.ags_lineitems_url else "No"),
             ],
             search=("title", "context_id", "canvas_course_id"),
             fields=["title", "token_limit", "show_unit_token_count", "show_course_token_usage", "is_active"],
+            labels={"title": "Título", "token_limit": "Límite de tokens por estudiante",
+                    "show_unit_token_count": "Mostrar al estudiante los tokens por unidad",
+                    "show_course_token_usage": "Mostrar al estudiante el consumo total del curso", "is_active": "Curso activo"},
         ),
         Resource(
-            "gates", "Páginas gate por curso", CoursePageGate,
+            "gates", "Páginas bloqueadas por curso", CoursePageGate, singular="página bloqueada",
             columns=[
                 ("Curso", "course"), ("Momento", "momento"), ("Página Canvas", "canvas_page_url"),
-                ("Etiqueta", "label"), ("Orden", "order"),
+                ("Texto del botón", "label"), ("Orden", "order"),
                 ("Bloqueada", lambda o: o.locked_at.strftime("%Y-%m-%d %H:%M") if o.locked_at else "No"),
             ],
             search=("canvas_page_url", "momento", "label", "course__title"),
             fields=["course", "momento", "canvas_page_url", "label", "icon", "order"],
+            labels={"course": "Curso", "momento": "Momento", "canvas_page_url": "Página de Canvas (slug)", "label": "Texto del botón", "icon": "Ícono (Font Awesome)", "order": "Orden"},
             select_related=("course",), can_create=True, can_delete=True,
             extra_actions=(("lock", "portal:gate_lock", "Bloquear en Canvas"),),
         ),
         Resource(
-            "default_gates", "Gates por defecto", DefaultPageGate,
-            columns=[("Momento", "momento"), ("Página Canvas", "canvas_page_url"), ("Etiqueta", "label"), ("Orden", "order")],
+            "default_gates", "Bloqueos por defecto", DefaultPageGate, singular="bloqueo por defecto",
+            columns=[("Momento", "momento"), ("Página Canvas", "canvas_page_url"), ("Texto del botón", "label"), ("Orden", "order")],
             search=("canvas_page_url", "momento", "label"),
             fields=["momento", "canvas_page_url", "label", "icon", "order"],
+            labels={"course": "Curso", "momento": "Momento", "canvas_page_url": "Página de Canvas (slug)", "label": "Texto del botón", "icon": "Ícono (Font Awesome)", "order": "Orden"},
             can_create=True, can_delete=True,
         ),
         Resource(
-            "flows", "Flujos n8n", N8nFlow,
-            columns=[("Código", "code"), ("Nombre", "label"), ("Webhook", "webhook_url"), ("Timeout (s)", "timeout_seconds"), ("Activo", _bool("is_active"))],
-            search=("code", "label"),
-            fields=["code", "label", "webhook_url", "shared_secret", "timeout_seconds", "is_active"],
-            form_class=FlowForm, can_create=True, can_delete=True,
-        ),
-        Resource(
-            "prompts", "Plantillas de prompt", PromptTemplate,
-            columns=[("Título", "title"), ("Momento", "momento_tipo"), ("Curso", lambda o: o.course or "Global"), ("Flujo", "n8n_flow"), ("Orden", "order"), ("Activa", _bool("is_active"))],
-            search=("title", "description"),
-            fields=["course", "momento_tipo", "title", "description", "n8n_flow", "order", "is_active"],
-            select_related=("course", "n8n_flow"), can_create=True, can_delete=True,
-        ),
-        Resource(
             "students", "Estudiantes", Student,
-            columns=[("Nombre", "name"), ("Email", "email"), ("Login", "login_id"), ("Canvas ID", "canvas_user_id"), ("Alta", lambda o: o.created_at.strftime("%Y-%m-%d"))],
+            columns=[("Nombre", "name"), ("Correo", "email"), ("Usuario Canvas", "login_id"), ("Canvas ID", "canvas_user_id"), ("Alta", lambda o: o.created_at.strftime("%Y-%m-%d"))],
             search=("name", "email", "login_id", "canvas_user_id"),
             ordering=("name",),
         ),
         Resource(
-            "ledger", "Ledger de tokens", TokenUsageLedger,
+            "ledger", "Registro de tokens", TokenUsageLedger,
             columns=[("Fecha", lambda o: o.created_at.strftime("%Y-%m-%d %H:%M")), ("Matrícula", "enrollment"), ("Tokens", "tokens_total"), ("Nota", "note")],
             search=("enrollment__student__name", "enrollment__student__email", "note"),
             select_related=("enrollment__student", "enrollment__course"), ordering=("-created_at",),
         ),
         Resource(
-            "launch_logs", "Logs de lanzamiento LTI", LtiLaunchLog,
-            columns=[("Fecha", lambda o: o.created_at.strftime("%Y-%m-%d %H:%M:%S")), ("Válido", _bool("validated")), ("Issuer", "issuer"), ("Sub", "sub"), ("IP", "ip_address"), ("Error", lambda o: (o.error or "")[:80])],
+            "launch_logs", "Registros de lanzamiento LTI", LtiLaunchLog,
+            columns=[("Fecha", lambda o: o.created_at.strftime("%Y-%m-%d %H:%M:%S")), ("Válido", _bool("validated")), ("Emisor", "issuer"), ("Identificador (sub)", "sub"), ("IP", "ip_address"), ("Error", lambda o: (o.error or "")[:80])],
             search=("sub", "issuer", "ip_address", "error"), ordering=("-created_at",),
         ),
         Resource(
             "audit", "Auditoría del portal", AuditLog,
-            columns=[("Fecha", lambda o: o.created_at.strftime("%Y-%m-%d %H:%M:%S")), ("Usuario", "username"), ("Acción", "action"), ("Recurso", "resource"), ("Objeto", "object_repr"), ("Detalle", lambda o: o.detail[:100]), ("IP", "ip_address")],
-            search=("username", "action", "resource", "object_repr", "detail"), ordering=("-created_at",),
+            columns=[("Fecha", lambda o: o.created_at.strftime("%Y-%m-%d %H:%M:%S")), ("Usuario", "username"), ("Acción", audit.action_label), ("Sección", audit.resource_label), ("Objeto", "object_repr"), ("Detalle", lambda o: o.detail[:100]), ("IP", "ip_address")],
+            search=("username", "action", "object_repr", "detail"), ordering=("-created_at",),
         ),
     ]
 }

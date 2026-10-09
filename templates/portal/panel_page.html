@@ -1,0 +1,6 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block crumbs %}{% for label, url in crumbs %}{% if url %}<a href="{{ url }}">{{ label }}</a>{% else %}<span>{{ label }}</span>{% endif %}{% endfor %}{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block lead %}{% if lead %}<p class="lead">{{ lead }}</p>{% endif %}{% endblock %}
+{% block content %}<div class="card page-panel{% if wide %} wide{% endif %}">{% include "portal/_panel.html" %}</div>{% endblock %}

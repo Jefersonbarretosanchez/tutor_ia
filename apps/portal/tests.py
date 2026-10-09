@@ -21,8 +21,8 @@ class PortalTests(TestCase):
     def setUpTestData(cls):
         call_command("seed_portal", verbosity=0)
         cls.sa = make_user("boss", "super_admin")
-        cls.coord = make_user("coord", "coordinador")
-        cls.soporte = make_user("sop", "soporte")
+        make_user("coord", "coordinador")
+        make_user("sop", "soporte")
 
     def setUp(self):
         cache.clear()
@@ -37,7 +37,7 @@ class PortalTests(TestCase):
     def test_anonymous_redirected_to_login(self):
         r = self.client.get(reverse("portal:dashboard"))
         self.assertEqual(r.status_code, 302)
-        self.assertIn("/portal/login/", r["Location"])
+        self.assertIn("/portal/ingresar/", r["Location"])
 
     def test_login_ok_and_user_without_role_rejected(self):
         self.assertEqual(self.login("boss").status_code, 302)
@@ -56,7 +56,7 @@ class PortalTests(TestCase):
     def test_permissions_enforced_server_side(self):
         self.login("sop")
         self.assertEqual(self.client.get(reverse("portal:user_list")).status_code, 403)
-        self.assertEqual(self.client.get(reverse("portal:resource_list", args=["flows"])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("portal:resource_list", args=["audit"])).status_code, 403)
         self.assertEqual(self.client.get(reverse("portal:enrollment_list")).status_code, 200)
         # soporte puede ver cursos pero no editarlos
         self.assertEqual(self.client.get(reverse("portal:resource_create", args=["gates"])).status_code, 403)
@@ -69,12 +69,12 @@ class PortalTests(TestCase):
     def test_matrix_edit_changes_access_and_is_audited(self):
         role = Role.objects.get(code="soporte")
         self.login("boss")
-        self.client.post(reverse("portal:role_matrix", args=[role.pk]), {"perm": ["flows:view", "bogus:view"]})
+        self.client.post(reverse("portal:role_matrix", args=[role.pk]), {"perm": ["audit:view", "bogus:view"]})
         perms = set(RolePermission.objects.filter(role=role).values_list("resource", "action"))
-        self.assertEqual(perms, {("flows", "view")})
+        self.assertEqual(perms, {("audit", "view")})
         self.assertTrue(AuditLog.objects.filter(action="edit_matrix").exists())
         self.login("sop")
-        self.assertEqual(self.client.get(reverse("portal:resource_list", args=["flows"])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("portal:resource_list", args=["audit"])).status_code, 200)
 
     def test_super_admin_matrix_is_locked(self):
         role = Role.objects.get(code="super_admin")
@@ -87,7 +87,7 @@ class PortalTests(TestCase):
             "username": "boss", "email": "boss@x.com", "is_active": "on", "role": Role.objects.get(code="auditor").pk,
         })
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, "al menos un super admin")
+        self.assertContains(r, "al menos un superadministrador")
 
     def test_create_user_forces_password_change(self):
         self.login("boss")
@@ -100,7 +100,7 @@ class PortalTests(TestCase):
         self.client.post(reverse("portal:login"), {"username": "nuevo", "password": "Otra-Clave-Larga-9"})
         r = self.client.get(reverse("portal:dashboard"))
         self.assertEqual(r.status_code, 302)
-        self.assertIn("/portal/password/", r["Location"])
+        self.assertIn("/portal/contrasena/", r["Location"])
 
     def test_weak_password_rejected(self):
         self.login("boss")
@@ -178,3 +178,120 @@ class PortalTests(TestCase):
         self.assertEqual(TokenUsageLedger.total_for(e), 70)
         self.assertTrue(AuditLog.objects.filter(action="credit_tokens").exists())
         self.assertEqual(self.client.get(reverse("portal:enrollment_list")).status_code, 200)
+
+    def test_sidebar_only_lists_permitted_sections(self):
+        self.login("sop")
+        html = self.client.get(reverse("portal:dashboard")).content.decode()
+        self.assertIn(reverse("portal:enrollment_list"), html)
+        self.assertNotIn(reverse("portal:user_list"), html)
+        self.assertNotIn(reverse("portal:role_list"), html)
+
+    def test_global_search_and_pages_for_other_roles(self):
+        self._enrollment()
+        self.login("coord")
+        r = self.client.get(reverse("portal:search"), {"q": "Ana"}, HTTP_HX_REQUEST="true")
+        self.assertContains(r, "Ana")
+        self.assertEqual(self.client.get(reverse("portal:search"), {"q": "a"}).status_code, 200)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("portal:search")).status_code, 302)
+        for who in ("sop", "coord"):
+            self.login(who)
+            self.assertEqual(self.client.get(reverse("portal:dashboard")).status_code, 200)
+
+    def _moment(self, e, tokens=(300, 200)):
+        from apps.chat.models import ClaraMessage, ClaraMoment
+
+        m = ClaraMoment.objects.create(enrollment=e, momento="unidad_1", mensajes_usados=2, porcentaje_usado=40, puede_avanzar=True)
+        ClaraMessage.objects.create(moment=m, role="assistant", content="Hola", tokens_used=tokens[0])
+        ClaraMessage.objects.create(moment=m, role="user", content="Respuesta")
+        ClaraMessage.objects.create(moment=m, role="assistant", content="Bien", tokens_used=tokens[1])
+        return m
+
+    def test_reset_chat_requires_permission(self):
+        e = self._enrollment()
+        m = self._moment(e)
+        for who in ("coord", "sop"):
+            self.login(who)
+            self.assertEqual(self.client.post(reverse("portal:enrollment_reset_chat", args=[e.pk])).status_code, 403)
+            self.assertEqual(self.client.post(reverse("portal:conversation_reset", args=[m.pk])).status_code, 403)
+        from apps.chat.models import ClaraMoment
+
+        self.assertTrue(ClaraMoment.objects.filter(pk=m.pk).exists())
+
+    def test_reset_all_chat_with_refund_reenables_student(self):
+        from apps.chat.models import ClaraMessage, ClaraMoment, TokenUsageLedger
+
+        e = self._enrollment()  # bloqueado, consumo = límite (100)
+        self._moment(e)
+        self.login("boss")
+        r = self.client.post(reverse("portal:enrollment_reset_chat", args=[e.pk]), {"refund": "on"})
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(ClaraMoment.objects.filter(enrollment=e).exists())
+        self.assertFalse(ClaraMessage.objects.exists())
+        self.assertEqual(TokenUsageLedger.total_for(e), 100 - 500)
+        e.refresh_from_db()
+        self.assertTrue(e.chat_enabled)
+        self.assertTrue(AuditLog.objects.filter(action="reset_chat").exists())
+
+    def test_reset_single_conversation_without_refund_keeps_ledger(self):
+        from apps.chat.models import ClaraMoment, TokenUsageLedger
+
+        e = self._enrollment()
+        m = self._moment(e)
+        self.login("boss")
+        self.client.post(reverse("portal:conversation_reset", args=[m.pk]))
+        self.assertFalse(ClaraMoment.objects.filter(pk=m.pk).exists())
+        self.assertEqual(TokenUsageLedger.total_for(e), 100)
+        self.assertEqual(self.client.get(reverse("portal:conversation_list")).status_code, 200)
+
+    def test_reset_buttons_render_only_with_permission(self):
+        e = self._enrollment()
+        m = self._moment(e)
+        self.login("boss")
+        self.assertContains(self.client.get(reverse("portal:enrollment_list")), "Reiniciar chat")
+        self.assertContains(self.client.get(reverse("portal:conversation_detail", args=[m.pk])), "Reiniciar esta conversación")
+        self.login("coord")
+        self.assertNotContains(self.client.get(reverse("portal:enrollment_list")), "Reiniciar chat")
+        self.assertNotContains(self.client.get(reverse("portal:conversation_detail", args=[m.pk])), "Reiniciar esta conversación")
+
+    def test_modal_forms_return_fragments_and_hx_redirect(self):
+        self.login("boss")
+        r = self.client.get(reverse("portal:user_create"), HTTP_HX_REQUEST="true")
+        self.assertContains(r, "dlg-head")
+        self.assertNotContains(r, "<html")
+        self.assertIn("HX-Request", r["Vary"])
+        # Acceso directo (sin HTMX) = página completa
+        self.assertContains(self.client.get(reverse("portal:user_create")), "<html")
+        data = {"username": "modal1", "email": "m@x.com", "is_active": "on", "role": Role.objects.get(code="auditor").pk, "password": "Otra-Clave-Larga-9"}
+        r = self.client.post(reverse("portal:user_create"), data, HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 204)
+        self.assertEqual(r["HX-Redirect"], reverse("portal:user_list"))
+        # Error de validación: se vuelve a pintar el formulario dentro del modal
+        r = self.client.post(reverse("portal:user_create"), {**data, "username": "modal2", "password": "1"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "dlg-head")
+
+    def test_credit_modal_swaps_row_and_closes(self):
+        e = self._enrollment()
+        self.login("boss")
+        self.assertContains(self.client.get(reverse("portal:enrollment_credit", args=[e.pk]), HTTP_HX_REQUEST="true"), "Acreditar tokens")
+        r = self.client.post(reverse("portal:enrollment_credit", args=[e.pk]), {"tokens": 5, "note": "x"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(r["HX-Retarget"], f"#enr-{e.pk}")
+        self.assertEqual(r["HX-Trigger"], "close-modal")
+
+    def test_everything_is_in_spanish(self):
+        e = self._enrollment()
+        self._moment(e)
+        self.login("boss")
+        urls = [reverse("portal:dashboard"), reverse("portal:enrollment_list"), reverse("portal:user_create"), reverse("portal:role_create"),
+                reverse("portal:resource_edit", args=["courses", e.course.pk]), reverse("portal:resource_create", args=["gates"]),
+                reverse("portal:resource_create", args=["default_gates"]), reverse("portal:resource_list", args=["audit"]),
+                reverse("portal:resource_list", args=["launch_logs"]), reverse("portal:role_matrix", args=[Role.objects.get(code="soporte").pk]),
+                reverse("portal:enrollment_reset_chat", args=[e.pk]), reverse("portal:password_change")]
+        english = ["Dashboard", "Logout", "Log out", "Save", "Delete", "Users<", "Courses", "Search", "Token limit", ">Title<", "Show unit", "Is active", "Gates", "Ledger", "Username", "First name", "Order<", "Course<"]
+        for url in urls:
+            html = self.client.get(url).content.decode()
+            for word in english:
+                self.assertNotIn(word, html, f"'{word}' aparece en {url}")
+        self.assertIn("cursos", reverse("portal:resource_list", args=["courses"]))
+        self.assertTrue(reverse("portal:login").endswith("/ingresar/"))

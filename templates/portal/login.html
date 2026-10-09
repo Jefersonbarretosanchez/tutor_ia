@@ -1,14 +1,21 @@
 {% extends "portal/base.html" %}
 {% block title %}Ingresar{% endblock %}
 {% block anon %}
-<div class="login card">
-  <h2>Portal de administración</h2>
-  <form method="post">{% csrf_token %}
-    <input type="hidden" name="next" value="{{ next }}">
-    {% for e in form.non_field_errors %}<div class="msg error">{{ e }}</div>{% endfor %}
-    <div class="field"><label for="id_username">Usuario</label><input type="text" name="username" id="id_username" autofocus autocomplete="username" required></div>
-    <div class="field"><label for="id_password">Contraseña</label><input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
-    <button class="btn" style="width:100%">Ingresar</button>
-  </form>
+<div class="auth">
+  <aside class="auth-art">
+    <div class="brand" style="padding:0"><i></i>LTI Chat Scala</div>
+    <div><h1>Gestiona Clara sin salir de un solo lugar.</h1><p>Cursos, matrículas, tokens y accesos del equipo, con permisos según tu rol.</p></div>
+    <small style="color:var(--side-mut)">Portal de administración</small>
+  </aside>
+  <div class="auth-form">
+    <form method="post" class="card">{% csrf_token %}
+      <h2 style="font-size:22px">Ingresar</h2>
+      <input type="hidden" name="next" value="{{ next }}">
+      {% for e in form.non_field_errors %}<div class="msg" role="alert">{{ e }}</div>{% endfor %}
+      <div class="field"><label for="id_username">Usuario</label><input type="text" name="username" id="id_username" autofocus autocomplete="username" required></div>
+      <div class="field"><label for="id_password">Contraseña</label><input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
+      <button class="btn" style="width:100%">Ingresar</button>
+    </form>
+  </div>
 </div>
 {% endblock %}
